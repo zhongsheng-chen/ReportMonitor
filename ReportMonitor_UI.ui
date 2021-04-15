@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>564</width>
+    <height>292</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>ReportMonitor</string>
+  </property>
+  <property name="windowIcon">
+   <iconset>
+    <normaloff>LELIEL.ico</normaloff>LELIEL.ico</iconset>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="7" column="0" colspan="4">
+     <widget class="QLabel" name="Label_news">
+      <property name="font">
+       <font>
+        <pointsize>16</pointsize>
+       </font>
+      </property>
+      <property name="layoutDirection">
+       <enum>Qt::LeftToRight</enum>
+      </property>
+      <property name="text">
+       <string>提示信息</string>
+      </property>
+      <property name="textFormat">
+       <enum>Qt::AutoText</enum>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="3">
+     <widget class="QLabel" name="Label_yzm">
+      <property name="font">
+       <font>
+        <pointsize>16</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>验证码：</string>
+      </property>
+      <property name="textFormat">
+       <enum>Qt::AutoText</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="0">
+     <widget class="QLabel" name="Label_stID">
+      <property name="font">
+       <font>
+        <pointsize>16</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>学号：</string>
+      </property>
+      <property name="textFormat">
+       <enum>Qt::AutoText</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="3">
+     <widget class="QPushButton" name="button_saveID">
+      <property name="text">
+       <string>设为默认帐号</string>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="1">
+     <widget class="QLineEdit" name="Line_password">
+      <property name="echoMode">
+       <enum>QLineEdit::PasswordEchoOnEdit</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="1">
+     <widget class="QLineEdit" name="Line_stID"/>
+    </item>
+    <item row="3" column="0">
+     <widget class="QLabel" name="Label_password">
+      <property name="font">
+       <font>
+        <pointsize>16</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>密码：</string>
+      </property>
+      <property name="textFormat">
+       <enum>Qt::AutoText</enum>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="7">
+     <widget class="QLabel" name="pic_yzm">
+      <property name="minimumSize">
+       <size>
+        <width>64</width>
+        <height>28</height>
+       </size>
+      </property>
+      <property name="maximumSize">
+       <size>
+        <width>64</width>
+        <height>28</height>
+       </size>
+      </property>
+      <property name="text">
+       <string/>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="0">
+     <widget class="QPushButton" name="button_linkWeb">
+      <property name="text">
+       <string>连接网站</string>
+      </property>
+     </widget>
+    </item>
+    <item row="3" column="7">
+     <widget class="QCheckBox" name="ocr">
+      <property name="font">
+       <font>
+        <pointsize>16</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>托管</string>
+      </property>
+     </widget>
+    </item>
+    <item row="8" column="0" rowspan="2" colspan="8">
+     <widget class="QLabel" name="label">
+      <property name="text">
+       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;小广告：狗狗孩子吧qaq 打开支付宝首页搜索“565788083” 立即领红包。反馈邮箱：rp5821@163.com&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      </property>
+     </widget>
+    </item>
+    <item row="2" column="5" colspan="2">
+     <widget class="QLineEdit" name="Line_yzm"/>
+    </item>
+    <item row="3" column="5" colspan="2">
+     <widget class="QPushButton" name="start">
+      <property name="text">
+       <string>开始</string>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="6">
+     <widget class="QPushButton" name="button_txt">
+      <property name="text">
+       <string>屏蔽列表</string>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="5">
+     <widget class="QPushButton" name="stop">
+      <property name="text">
+       <string>停止</string>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="7">
+     <widget class="QCheckBox" name="check_toast">
+      <property name="enabled">
+       <bool>true</bool>
+      </property>
+      <property name="font">
+       <font>
+        <pointsize>16</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>通知</string>
+      </property>
+      <property name="checked">
+       <bool>true</bool>
+      </property>
+     </widget>
+    </item>
+    <item row="7" column="5" colspan="2">
+     <widget class="QTextBrowser" name="textBrowser"/>
+    </item>
+    <item row="6" column="1" colspan="2">
+     <widget class="QLabel" name="Label_linkStatus">
+      <property name="font">
+       <font>
+        <pointsize>16</pointsize>
+       </font>
+      </property>
+      <property name="text">
+       <string>未连接</string>
+      </property>
+     </widget>
+    </item>
+    <item row="6" column="3">
+     <widget class="QLabel" name="openWeb">
+      <property name="text">
+       <string>&lt;A href='http://202.4.152.190:8080/pyxx/Default.aspx'&gt;教务网&lt;/a&gt;</string>
+      </property>
+      <property name="alignment">
+       <set>Qt::AlignCenter</set>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>0</y>
+     <width>564</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <widget class="QMenu" name="menu">
+    <property name="title">
+     <string>监测任务</string>
+    </property>
+    <addaction name="menu_RM"/>
+    <addaction name="menu_L"/>
+   </widget>
+   <addaction name="menu"/>
+  </widget>
+  <widget class="QStatusBar" name="statusbar"/>
+  <action name="menu_RM">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>ReportMonitor</string>
+   </property>
+  </action>
+  <action name="menu_L">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Lesson</string>
+   </property>
+  </action>
+ </widget>
+ <tabstops>
+  <tabstop>Line_stID</tabstop>
+  <tabstop>Line_password</tabstop>
+  <tabstop>Line_yzm</tabstop>
+ </tabstops>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>Line_yzm</sender>
+   <signal>returnPressed()</signal>
+   <receiver>MainWindow</receiver>
+   <slot>yzmShow()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>483</x>
+     <y>55</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>553</x>
+     <y>105</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+ <slots>
+  <slot>yzmShow()</slot>
+ </slots>
+</ui>
