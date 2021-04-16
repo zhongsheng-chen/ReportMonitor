@@ -11,6 +11,9 @@ from PyQt5.QtGui import *
 from ReportMonitor_UI import Ui_MainWindow
 import threading
 from win10toast import ToastNotifier
+from Notification import send_notification
+from collections import defaultdict
+import winsound
 
 goalurl = "yjsy.buct.edu.cn:8080"
 
@@ -23,15 +26,22 @@ class login(QThread):
     user = 0
     password = 0
     option = webdriver.ChromeOptions()
+    option.add_argument("--start-maximized")
+    option.add_argument('window-size=1536, 824')
     option.add_argument('headless')
     myList = list()
 
     def __init__(self, *args, **kwargs):
         self.driver = webdriver.Chrome(options=self.option)
         self.driver.get("http://" + goalurl + "/pyxx/login.aspx")
+        self.driver.maximize_window()
+        current_window_size = self.driver.get_window_size()
+        width = current_window_size["width"]
+        height = current_window_size["height"]
+        self.driver.set_window_size(width, height)
         self.aElement = self.driver.find_element_by_xpath('./*//title')
         print(self.aElement.get_attribute("innerText"))
-        self.driver.set_window_size(1024, 768)
+
         self.yzm = ""
         self.flagFirst = True
         return super().__init__(*args, **kwargs)
@@ -66,9 +76,13 @@ class login(QThread):
 
     def yzmCrop(self):
         # ## Zhongsheng modified on 15th April, 2021
-        self.driver.set_window_size(1280, 1024)
+        self.driver.maximize_window()
+        current_window_size = self.driver.get_window_size()
+        width = current_window_size["width"]
+        height = current_window_size["height"]
+        self.driver.set_window_size(width, height)
 
-        self.driver.get_screenshot_as_file('screenshot_no_save.png')
+        self.driver.get_screenshot_as_file('screenshot.png')
         yzmElement = self.driver.find_element_by_xpath("./*//input[@name='txtyzm']/../img")
         bottomTable = self.driver.find_element_by_xpath("./*//table[@id='Table2']/tbody/tr[3]")
         img = Image.open('screenshot.png')
@@ -94,6 +108,7 @@ class login(QThread):
         self.driver.get(url)
         target = self.driver.find_element_by_xpath("./*//input[@name='txtyzm']/../img")
         self.driver.execute_script("arguments[0].scrollIntoView(false);", target)  # 拖动到可见的元素去
+
         try:
             tempList = self.driver.find_elements_by_xpath("./*//img[@alt='提交心得']")
         except:
@@ -125,6 +140,8 @@ class login(QThread):
                                 "innerText") + "\r\n剩余人数：" + str(int(maxNum) - int(nowNum)))
                         self.yzmCrop()
                         self.aElement = each
+                        winsound.Beep(600, 3000)
+                        send_notification()
                         return
             self.monitor_signal.emit(string)
             time.sleep(5)
@@ -211,13 +228,64 @@ class login(QThread):
                     time.sleep(1)
 
     def ocr(self):
-        self.yzm = pytesseract.image_to_string(Image.open('code.png'))
-        self.yzm = self.yzm[0:4]
-        if '\n' in self.yzm or '\r\n' in self.yzm:
-            self.yzm = ''
+
+        def _get_threshold(image):
+            pixel_dict = defaultdict(int)
+
+            #  a dictionary of pixels and the number of occurrences of that pixel
+            rows, cols = image.size
+            for i in range(rows):
+                for j in range(cols):
+                    pixel = image.getpixel((i, j))
+                    pixel_dict[pixel] += 1
+
+            count_max = max(pixel_dict.values())  # gets the number of times a pixel appears
+            pixel_dict_reverse = {v: k for k, v in pixel_dict.items()}
+            threshold = pixel_dict_reverse[count_max]  #
+
+            return threshold
+
+        def _get_bin_table(threshold):
+            # table
+            table = []
+            for i in range(256):
+                rate = 0.1  # threshold
+                if threshold * (1 - rate) <= i <= threshold * (1 + rate):
+                    table.append(1)
+                else:
+                    table.append(0)
+            return table
+
+        def _cut_noise(image):
+            rows, cols = image.size  #
+            change_pos = []  #
+            for i in range(1, rows - 1):
+                for j in range(1, cols - 1):
+                    pixel_set = []
+                    for m in range(i - 1, i + 2):
+                        for n in range(j - 1, j + 2):
+                            if image.getpixel((m, n)) != 1:  # 1,0
+                                pixel_set.append(image.getpixel((m, n)))
+                    if len(pixel_set) <= 4:
+                        change_pos.append((i, j))
+            for pos in change_pos:
+                image.putpixel(pos, 1)
+            return image
+
+        image = Image.open('code.png')
+        image = image.convert('L')
+        max_pixel = _get_threshold(image)
+        table = _get_bin_table(threshold=max_pixel)
+        image = image.point(table, '1')
+        image = _cut_noise(image)
+        yzm = pytesseract.image_to_string(image)
+        exclude_char_list = ' .:\\|\'\"?![],()~@#$%^&*_+-={};<>/¥'
+        yzm = ''.join([x for x in yzm if x not in exclude_char_list]).strip()
+        self.yzm = yzm
         self.monitor_signal.emit("识别验证码：" + self.yzm)
         self.ocr_signal.emit(str(self.yzm))
         time.sleep(1)
+
 
     def doinput(self, yzmInput, mode=False):
         try:
@@ -245,9 +313,8 @@ class login(QThread):
             self.driver.find_element_by_xpath("./*//input[@name='txtyzm']").send_keys(yzmInput)
             self.aElement.click()
             time.sleep(0.5)
-            # al=self.driver.switch_to_alert()
-            al = self.driver.switch_to.alert()
-            al.accept()
+            alert = self.driver.switch_to.alert
+            alert.accept()
             time.sleep(1)
             self.judge()
             self.monitor()
