@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import sys
 import os
 from selenium import webdriver
@@ -11,6 +14,10 @@ from PyQt5.QtGui import *
 from ReportMonitor_UI import Ui_MainWindow
 import threading
 from win10toast import ToastNotifier
+from Notification import send_notification
+from collections import defaultdict
+import winsound
+import string
 
 goalurl = "yjsy.buct.edu.cn:8080"
 
@@ -23,15 +30,22 @@ class login(QThread):
     user = 0
     password = 0
     option = webdriver.ChromeOptions()
+    option.add_argument("--start-maximized")
+    option.add_argument('window-size=1536, 824')
     option.add_argument('headless')
-    myList = list()
+    report_list = list()
 
     def __init__(self, *args, **kwargs):
         self.driver = webdriver.Chrome(options=self.option)
         self.driver.get("http://" + goalurl + "/pyxx/login.aspx")
+        self.driver.maximize_window()
+        current_window_size = self.driver.get_window_size()
+        width = current_window_size["width"]
+        height = current_window_size["height"]
+        self.driver.set_window_size(width, height)
         self.aElement = self.driver.find_element_by_xpath('./*//title')
         print(self.aElement.get_attribute("innerText"))
-        self.driver.set_window_size(1024, 768)
+
         self.yzm = ""
         self.flagFirst = True
         return super().__init__(*args, **kwargs)
@@ -58,7 +72,6 @@ class login(QThread):
             bottom = int(yzmElement.location['y'] + yzmElement.size['height'])
             img = Image.open('screenshot.png')
             img = img.crop((left, top, right, bottom))
-            # img=img.crop((left, top, right, bottom))
             img.save('code.png')
             self.show_yzm_signal.emit(i)
         except:
@@ -66,9 +79,13 @@ class login(QThread):
 
     def yzmCrop(self):
         # ## Zhongsheng modified on 15th April, 2021
-        self.driver.set_window_size(1280, 1024)
+        self.driver.maximize_window()
+        current_window_size = self.driver.get_window_size()
+        width = current_window_size["width"]
+        height = current_window_size["height"]
+        self.driver.set_window_size(width, height)
 
-        self.driver.get_screenshot_as_file('screenshot_no_save.png')
+        self.driver.get_screenshot_as_file('screenshot.png')
         yzmElement = self.driver.find_element_by_xpath("./*//input[@name='txtyzm']/../img")
         bottomTable = self.driver.find_element_by_xpath("./*//table[@id='Table2']/tbody/tr[3]")
         img = Image.open('screenshot.png')
@@ -94,14 +111,7 @@ class login(QThread):
         self.driver.get(url)
         target = self.driver.find_element_by_xpath("./*//input[@name='txtyzm']/../img")
         self.driver.execute_script("arguments[0].scrollIntoView(false);", target)  # 拖动到可见的元素去
-        try:
-            tempList = self.driver.find_elements_by_xpath("./*//img[@alt='提交心得']")
-        except:
-            tempList = []
-        if ((len(tempList) - len(self.myList)) == 1 and self.flagFirst == False):
-            self.show_yzm_signal.emit(5)
-        self.myList = tempList
-        self.flagFirst = False
+
         i = 1
         while (1):
             reportList = self.driver.find_elements_by_xpath("./*//img[@alt='我要报名']")
@@ -118,14 +128,43 @@ class login(QThread):
                                 leapflag = True
                                 string = string + reportName + " 在屏蔽列表中，不选择。"
                     if leapflag == False:
-                        self.monitor_signal.emit(
-                            string + "！有可抢报告！" + "\r\n" + each.find_element_by_xpath("../../../td[2]").get_attribute(
-                                "innerText") + "\r\n" + each.find_element_by_xpath("../../../td[4]").get_attribute(
-                                "innerText") + "\r\n地点：" + each.find_element_by_xpath("../../../td[6]").get_attribute(
-                                "innerText") + "\r\n剩余人数：" + str(int(maxNum) - int(nowNum)))
+                        report_name = each.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+                        report_date = each.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
+                        report_location = each.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
+                        report_availability = str(int(maxNum) - int(nowNum))
+                        report_info = "报告名称：" + report_name + "\r\n" + "报告时间：" + report_date + "\r\n" \
+                                                                                               "报告地点：" + report_location + "\r\n" + "可报名人数：" + report_availability
+
+                        # report_info = string + "！有可抢报告！" + "\r\n" + each.find_element_by_xpath(
+                        #     "../../../td[2]").get_attribute(
+                        #     "innerText") + "\r\n" + each.find_element_by_xpath("../../../td[4]").get_attribute(
+                        #     "innerText") + "\r\n地点：" + each.find_element_by_xpath("../../../td[6]").get_attribute(
+                        #     "innerText") + "\r\n剩余人数：" + str(int(maxNum) - int(nowNum))
+
+                        self.monitor_signal.emit(string + "！有可抢报告...\r\n" + report_info)
                         self.yzmCrop()
                         self.aElement = each
+                        winsound.Beep(600, 3000)
+                        send_notification("发现报告...\r\n" + report_info)
                         return
+
+            try:
+                previous_report_list = self.driver.find_elements_by_xpath("./*//img[@alt='提交心得']")
+            except:
+                previous_report_list = []
+            if (len(previous_report_list) - len(self.report_list)) == 1 and self.flagFirst is False:
+                new_report = list(filter(lambda report: report not in previous_report_list, self.report_list))[0]
+                new_report_name = new_report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+                new_report_date = new_report.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
+                new_report_location = new_report.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
+                new_report_info = f"报告名称：{new_report_name}\r\n" \
+                                  f"报告时间：{new_report_date}\r\n" \
+                                  f"报告地点：{new_report_location}"
+
+                self.show_yzm_signal.emit(5, f"已经抢到报告...\r\n" + new_report_info)
+            self.report_list = previous_report_list
+            self.flagFirst = False
+
             self.monitor_signal.emit(string)
             time.sleep(5)
             i = i + 1
@@ -211,10 +250,66 @@ class login(QThread):
                     time.sleep(1)
 
     def ocr(self):
-        self.yzm = pytesseract.image_to_string(Image.open('code.png'))
-        self.yzm = self.yzm[0:4]
-        if '\n' in self.yzm or '\r\n' in self.yzm:
-            self.yzm = ''
+
+        def _get_threshold(image):
+            pixel_dict = defaultdict(int)
+
+            #  a dictionary of pixels and the number of occurrences of that pixel
+            rows, cols = image.size
+            for i in range(rows):
+                for j in range(cols):
+                    pixel = image.getpixel((i, j))
+                    pixel_dict[pixel] += 1
+
+            count_max = max(pixel_dict.values())  # gets the number of times a pixel appears
+            pixel_dict_reverse = {v: k for k, v in pixel_dict.items()}
+            threshold = pixel_dict_reverse[count_max]  #
+
+            return threshold
+
+        def _get_bin_table(threshold):
+            table = []
+            for i in range(256):
+                rate = 0.1  # threshold
+                if threshold * (1 - rate) <= i <= threshold * (1 + rate):
+                    table.append(1)
+                else:
+                    table.append(0)
+            return table
+
+        def _cut_noise(image):
+            rows, cols = image.size  #
+            change_pos = []  #
+            for i in range(1, rows - 1):
+                for j in range(1, cols - 1):
+                    pixel_set = []
+                    for m in range(i - 1, i + 2):
+                        for n in range(j - 1, j + 2):
+                            if image.getpixel((m, n)) != 1:  # 1,0
+                                pixel_set.append(image.getpixel((m, n)))
+                    if len(pixel_set) <= 4:
+                        change_pos.append((i, j))
+            for pos in change_pos:
+                image.putpixel(pos, 1)
+            return image
+
+        image = Image.open('code.png')
+        image = image.convert('L')
+        max_pixel = _get_threshold(image)
+        table = _get_bin_table(threshold=max_pixel)
+        image = image.point(table, '1')
+        image.save('code_gray.png')
+        image = _cut_noise(image)
+        image.save('code_denoise.png')
+        yzm = pytesseract.image_to_string(image)
+        exclude_char_list = ' .·:`‘、“\\|\'\"?![],()~@#$%^&*_+-={};<>/¥'
+        yzm = ''.join([x for x in yzm if x not in exclude_char_list])
+
+        whitespace = ['\f', '\n', '\r', '\t', '\v', '\u00A0', '\u2028', '\u2029']
+        yzm = ''.join(filter(lambda x: x not in whitespace, filter(lambda x: x in string.printable, yzm))).strip(
+            ' \r\n\f\t\b\v\0')
+
+        self.yzm = yzm
         self.monitor_signal.emit("识别验证码：" + self.yzm)
         self.ocr_signal.emit(str(self.yzm))
         time.sleep(1)
@@ -245,9 +340,8 @@ class login(QThread):
             self.driver.find_element_by_xpath("./*//input[@name='txtyzm']").send_keys(yzmInput)
             self.aElement.click()
             time.sleep(0.5)
-            # al=self.driver.switch_to_alert()
-            al = self.driver.switch_to.alert()
-            al.accept()
+            alert = self.driver.switch_to.alert
+            alert.accept()
             time.sleep(1)
             self.judge()
             self.monitor()
@@ -298,7 +392,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _toast(self, string, sec=5):
         if self.toastFlag:
             try:
-                if self.ocr.isChecked() == True:
+                if self.ocr.isChecked() is True:
                     sec = 5
                 self.toaster.show_toast("ReportMonitor", string, icon_path='icon.ico', duration=sec, threaded=True)
             except:
@@ -363,20 +457,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except:
             self.textBrowser.append(str(time.asctime(time.localtime(time.time())))[-13:-5] + " ：" + "还没有连接到网站")
 
-    def yzmLoad(self, flag):
+    def yzmLoad(self, flag, report_info=""):
         self.pic_yzm.setPixmap(QPixmap('code.png'))
-        {'0': lambda: self.Label_news.setText("登录成功\r\n开始监测"), '1': lambda: self.Label_news.setText("请输入验证码\r\n然后按下回车"),
+        {'0': lambda: self.Label_news.setText("登录成功\r\n开始监测"),
+         '1': lambda: self.Label_news.setText("请输入验证码\r\n然后按下回车"),
          '2': lambda: self.Label_news.setText("登录失败\r\n请检查帐号密码并重试"),
          '4': lambda: self.Label_news.setText("检测到可抢报告\r\n请输入验证码"),
-         '5': lambda: self.Label_news.setText("有抢到的报告\r\n请登录网站查看"), '9': lambda: self.Label_news.setText("error")}[
+         '5': lambda: self.Label_news.setText("有抢到的报告\r\n请登录网站查看"),
+         '9': lambda: self.Label_news.setText("error")}[
             str(flag)]()
         self.flag = flag
-        if self.ocr.isChecked() == True and flag != 0 and flag != 5:
+        if self.ocr.isChecked() is True and flag != 0 and flag != 5:
             threading.Thread(target=self.thread.ocr).start()
         # if flag==0:
         #    self.openWeb.setText("<A href='http://202.4.152.190:8080/pyxx/Default.aspx'>教务网</a>")
         if flag == 5:
             self._toast("有成功抢到的报告，请自行登录研究生管理系统查看详情。", -1)
+            send_notification(report_info)
 
     def yzmShow(self):
         try:

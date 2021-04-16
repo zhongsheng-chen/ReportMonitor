@@ -147,7 +147,7 @@ class Ui_MainWindow(object):
         self.Label_password.setText(_translate("MainWindow", "密码："))
         self.button_linkWeb.setText(_translate("MainWindow", "连接网站"))
         self.ocr.setText(_translate("MainWindow", "托管"))
-        self.label.setText(_translate("MainWindow", "<html><head/><body><p>use for free </p></body></html>"))
+        self.label.setText(_translate("MainWindow", "<html><head/><body><p>use at free </p></body></html>"))
         self.start.setText(_translate("MainWindow", "开始"))
         self.button_txt.setText(_translate("MainWindow", "屏蔽列表"))
         self.stop.setText(_translate("MainWindow", "停止"))
