@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import sys
 import os
 from selenium import webdriver
@@ -14,6 +17,7 @@ from win10toast import ToastNotifier
 from Notification import send_notification
 from collections import defaultdict
 import winsound
+import string
 
 goalurl = "yjsy.buct.edu.cn:8080"
 
@@ -29,7 +33,7 @@ class login(QThread):
     option.add_argument("--start-maximized")
     option.add_argument('window-size=1536, 824')
     option.add_argument('headless')
-    myList = list()
+    report_list = list()
 
     def __init__(self, *args, **kwargs):
         self.driver = webdriver.Chrome(options=self.option)
@@ -68,7 +72,6 @@ class login(QThread):
             bottom = int(yzmElement.location['y'] + yzmElement.size['height'])
             img = Image.open('screenshot.png')
             img = img.crop((left, top, right, bottom))
-            # img=img.crop((left, top, right, bottom))
             img.save('code.png')
             self.show_yzm_signal.emit(i)
         except:
@@ -109,14 +112,6 @@ class login(QThread):
         target = self.driver.find_element_by_xpath("./*//input[@name='txtyzm']/../img")
         self.driver.execute_script("arguments[0].scrollIntoView(false);", target)  # 拖动到可见的元素去
 
-        try:
-            tempList = self.driver.find_elements_by_xpath("./*//img[@alt='提交心得']")
-        except:
-            tempList = []
-        if ((len(tempList) - len(self.myList)) == 1 and self.flagFirst == False):
-            self.show_yzm_signal.emit(5)
-        self.myList = tempList
-        self.flagFirst = False
         i = 1
         while (1):
             reportList = self.driver.find_elements_by_xpath("./*//img[@alt='我要报名']")
@@ -133,16 +128,43 @@ class login(QThread):
                                 leapflag = True
                                 string = string + reportName + " 在屏蔽列表中，不选择。"
                     if leapflag == False:
-                        self.monitor_signal.emit(
-                            string + "！有可抢报告！" + "\r\n" + each.find_element_by_xpath("../../../td[2]").get_attribute(
-                                "innerText") + "\r\n" + each.find_element_by_xpath("../../../td[4]").get_attribute(
-                                "innerText") + "\r\n地点：" + each.find_element_by_xpath("../../../td[6]").get_attribute(
-                                "innerText") + "\r\n剩余人数：" + str(int(maxNum) - int(nowNum)))
+                        report_name = each.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+                        report_date = each.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
+                        report_location = each.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
+                        report_availability = str(int(maxNum) - int(nowNum))
+                        report_info = "报告名称：" + report_name + "\r\n" + "报告时间：" + report_date + "\r\n" \
+                                                                                               "报告地点：" + report_location + "\r\n" + "可报名人数：" + report_availability
+
+                        # report_info = string + "！有可抢报告！" + "\r\n" + each.find_element_by_xpath(
+                        #     "../../../td[2]").get_attribute(
+                        #     "innerText") + "\r\n" + each.find_element_by_xpath("../../../td[4]").get_attribute(
+                        #     "innerText") + "\r\n地点：" + each.find_element_by_xpath("../../../td[6]").get_attribute(
+                        #     "innerText") + "\r\n剩余人数：" + str(int(maxNum) - int(nowNum))
+
+                        self.monitor_signal.emit(string + "！有可抢报告...\r\n" + report_info)
                         self.yzmCrop()
                         self.aElement = each
                         winsound.Beep(600, 3000)
-                        send_notification()
+                        send_notification("发现报告...\r\n" + report_info)
                         return
+
+            try:
+                previous_report_list = self.driver.find_elements_by_xpath("./*//img[@alt='提交心得']")
+            except:
+                previous_report_list = []
+            if (len(previous_report_list) - len(self.report_list)) == 1 and self.flagFirst is False:
+                new_report = list(filter(lambda report: report not in previous_report_list, self.report_list))[0]
+                new_report_name = new_report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+                new_report_date = new_report.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
+                new_report_location = new_report.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
+                new_report_info = f"报告名称：{new_report_name}\r\n" \
+                                  f"报告时间：{new_report_date}\r\n" \
+                                  f"报告地点：{new_report_location}"
+
+                self.show_yzm_signal.emit(5, f"已经抢到报告...\r\n" + new_report_info)
+            self.report_list = previous_report_list
+            self.flagFirst = False
+
             self.monitor_signal.emit(string)
             time.sleep(5)
             i = i + 1
@@ -246,7 +268,6 @@ class login(QThread):
             return threshold
 
         def _get_bin_table(threshold):
-            # table
             table = []
             for i in range(256):
                 rate = 0.1  # threshold
@@ -277,15 +298,21 @@ class login(QThread):
         max_pixel = _get_threshold(image)
         table = _get_bin_table(threshold=max_pixel)
         image = image.point(table, '1')
+        image.save('code_gray.png')
         image = _cut_noise(image)
+        image.save('code_denoise.png')
         yzm = pytesseract.image_to_string(image)
-        exclude_char_list = ' .:\\|\'\"?![],()~@#$%^&*_+-={};<>/¥'
-        yzm = ''.join([x for x in yzm if x not in exclude_char_list]).strip()
+        exclude_char_list = ' .·:`‘、“\\|\'\"?![],()~@#$%^&*_+-={};<>/¥'
+        yzm = ''.join([x for x in yzm if x not in exclude_char_list])
+
+        whitespace = ['\f', '\n', '\r', '\t', '\v', '\u00A0', '\u2028', '\u2029']
+        yzm = ''.join(filter(lambda x: x not in whitespace, filter(lambda x: x in string.printable, yzm))).strip(
+            ' \r\n\f\t\b\v\0')
+
         self.yzm = yzm
         self.monitor_signal.emit("识别验证码：" + self.yzm)
         self.ocr_signal.emit(str(self.yzm))
         time.sleep(1)
-
 
     def doinput(self, yzmInput, mode=False):
         try:
@@ -365,7 +392,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def _toast(self, string, sec=5):
         if self.toastFlag:
             try:
-                if self.ocr.isChecked() == True:
+                if self.ocr.isChecked() is True:
                     sec = 5
                 self.toaster.show_toast("ReportMonitor", string, icon_path='icon.ico', duration=sec, threaded=True)
             except:
@@ -430,20 +457,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except:
             self.textBrowser.append(str(time.asctime(time.localtime(time.time())))[-13:-5] + " ：" + "还没有连接到网站")
 
-    def yzmLoad(self, flag):
+    def yzmLoad(self, flag, report_info=""):
         self.pic_yzm.setPixmap(QPixmap('code.png'))
-        {'0': lambda: self.Label_news.setText("登录成功\r\n开始监测"), '1': lambda: self.Label_news.setText("请输入验证码\r\n然后按下回车"),
+        {'0': lambda: self.Label_news.setText("登录成功\r\n开始监测"),
+         '1': lambda: self.Label_news.setText("请输入验证码\r\n然后按下回车"),
          '2': lambda: self.Label_news.setText("登录失败\r\n请检查帐号密码并重试"),
          '4': lambda: self.Label_news.setText("检测到可抢报告\r\n请输入验证码"),
-         '5': lambda: self.Label_news.setText("有抢到的报告\r\n请登录网站查看"), '9': lambda: self.Label_news.setText("error")}[
+         '5': lambda: self.Label_news.setText("有抢到的报告\r\n请登录网站查看"),
+         '9': lambda: self.Label_news.setText("error")}[
             str(flag)]()
         self.flag = flag
-        if self.ocr.isChecked() == True and flag != 0 and flag != 5:
+        if self.ocr.isChecked() is True and flag != 0 and flag != 5:
             threading.Thread(target=self.thread.ocr).start()
         # if flag==0:
         #    self.openWeb.setText("<A href='http://202.4.152.190:8080/pyxx/Default.aspx'>教务网</a>")
         if flag == 5:
             self._toast("有成功抢到的报告，请自行登录研究生管理系统查看详情。", -1)
+            send_notification(report_info)
 
     def yzmShow(self):
         try:
