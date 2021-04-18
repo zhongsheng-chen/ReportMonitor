@@ -18,6 +18,7 @@ from Notification import send_notification
 from collections import defaultdict
 import winsound
 import string
+import cv2
 
 goalurl = "yjsy.buct.edu.cn:8080"
 
@@ -27,6 +28,7 @@ class login(QThread):
     monitor_signal = pyqtSignal(str)
     ocr_signal = pyqtSignal(str)
     toast_signal = pyqtSignal(str, int)
+
     user = 0
     password = 0
     option = webdriver.ChromeOptions()
@@ -53,7 +55,7 @@ class login(QThread):
     def __del__(self):
         self.flagFirst = True
 
-    def run(self, i=1, user=0, password=0):
+    def run(self, i=1, user=0, password=0, auto_login=False):
 
         if (user != 0) and (password != 0):
             self.user = user
@@ -71,10 +73,18 @@ class login(QThread):
             right = int(yzmElement.location['x'] + yzmElement.size['width'])
             bottom = int(yzmElement.location['y'] + yzmElement.size['height'])
             img = Image.open('screenshot.png')
-            img = img.crop((left, top, right, bottom))
+            img = img.crop((left + 1, top + 1, right - 1, bottom - 1))
             img.save('code.png')
-            self.show_yzm_signal.emit(i)
-        except:
+
+            # if manually login
+            if auto_login:
+                self.show_yzm_signal.emit(2)
+            else:
+                self.show_yzm_signal.emit(1)
+
+        # except:
+        except Exception as e:
+            self.monitor_signal.emit("[登录错误]:" + str(e))
             self.show_yzm_signal.emit(9)
 
     def yzmCrop(self):
@@ -90,18 +100,15 @@ class login(QThread):
         bottomTable = self.driver.find_element_by_xpath("./*//table[@id='Table2']/tbody/tr[3]")
         img = Image.open('screenshot.png')
         left = int(yzmElement.location['x'])
-
-        # top = int(yzmElement.location['y'])
-        # top = img.height - 32 - yzmElement.size['height'] #- bottomTable.size['height']
         if int(yzmElement.location['y'] + yzmElement.size['height']) > img.height:
             bottom = img.height
         else:
             bottom = int(yzmElement.location['y'] + yzmElement.size['height'])
         top = bottom - yzmElement.size['height']
         right = int(yzmElement.location['x'] + yzmElement.size['width'])
-        # bottom = int(yzmElement.location['y'] + yzmElement.size['height'])
+
         print((left, top, right, bottom))
-        img = img.crop((left, top, right, bottom))
+        img = img.crop((left + 1, top + 1, right - 1, bottom - 1))
         img.save('code.png')
         self.show_yzm_signal.emit(4)
         self.toast_signal.emit("有可抢报告，请输入验证码！", -1)
@@ -132,20 +139,14 @@ class login(QThread):
                         report_date = each.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
                         report_location = each.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
                         report_availability = str(int(maxNum) - int(nowNum))
-                        report_info = "报告名称：" + report_name + "\r\n" + "报告时间：" + report_date + "\r\n" \
-                                                                                               "报告地点：" + report_location + "\r\n" + "可报名人数：" + report_availability
+                        report_info = f"报告名称：{report_name}\r\n报告时间：{report_date}\r\n" \
+                                      f"报告地点：{report_location}\r\n可报名人数：{report_availability}"
 
-                        # report_info = string + "！有可抢报告！" + "\r\n" + each.find_element_by_xpath(
-                        #     "../../../td[2]").get_attribute(
-                        #     "innerText") + "\r\n" + each.find_element_by_xpath("../../../td[4]").get_attribute(
-                        #     "innerText") + "\r\n地点：" + each.find_element_by_xpath("../../../td[6]").get_attribute(
-                        #     "innerText") + "\r\n剩余人数：" + str(int(maxNum) - int(nowNum))
-
-                        self.monitor_signal.emit(string + "！有可抢报告...\r\n" + report_info)
+                        self.monitor_signal.emit(string + f"！有可抢报告...\r\n" + report_info)
                         self.yzmCrop()
                         self.aElement = each
                         winsound.Beep(600, 3000)
-                        send_notification("发现报告...\r\n" + report_info)
+                        send_notification(f"发现报告...\r\n" + report_info)
                         return
 
             try:
@@ -166,7 +167,7 @@ class login(QThread):
             self.flagFirst = False
 
             self.monitor_signal.emit(string)
-            time.sleep(5)
+            time.sleep(1)
             i = i + 1
             self.driver.refresh()
 
@@ -251,57 +252,12 @@ class login(QThread):
 
     def ocr(self):
 
-        def _get_threshold(image):
-            pixel_dict = defaultdict(int)
-
-            #  a dictionary of pixels and the number of occurrences of that pixel
-            rows, cols = image.size
-            for i in range(rows):
-                for j in range(cols):
-                    pixel = image.getpixel((i, j))
-                    pixel_dict[pixel] += 1
-
-            count_max = max(pixel_dict.values())  # gets the number of times a pixel appears
-            pixel_dict_reverse = {v: k for k, v in pixel_dict.items()}
-            threshold = pixel_dict_reverse[count_max]  #
-
-            return threshold
-
-        def _get_bin_table(threshold):
-            table = []
-            for i in range(256):
-                rate = 0.1  # threshold
-                if threshold * (1 - rate) <= i <= threshold * (1 + rate):
-                    table.append(1)
-                else:
-                    table.append(0)
-            return table
-
-        def _cut_noise(image):
-            rows, cols = image.size  #
-            change_pos = []  #
-            for i in range(1, rows - 1):
-                for j in range(1, cols - 1):
-                    pixel_set = []
-                    for m in range(i - 1, i + 2):
-                        for n in range(j - 1, j + 2):
-                            if image.getpixel((m, n)) != 1:  # 1,0
-                                pixel_set.append(image.getpixel((m, n)))
-                    if len(pixel_set) <= 4:
-                        change_pos.append((i, j))
-            for pos in change_pos:
-                image.putpixel(pos, 1)
-            return image
-
-        image = Image.open('code.png')
-        image = image.convert('L')
-        max_pixel = _get_threshold(image)
-        table = _get_bin_table(threshold=max_pixel)
-        image = image.point(table, '1')
-        image.save('code_gray.png')
-        image = _cut_noise(image)
-        image.save('code_denoise.png')
-        yzm = pytesseract.image_to_string(image)
+        img = cv2.imread("code.png")
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        img = cv2.inRange(img, lowerb=180, upperb=255)
+        cv2.imwrite('code_denoise.png', img)
+        img = Image.fromarray(img)
+        yzm = pytesseract.image_to_string(img)
         exclude_char_list = ' .·:`‘、“\\|\'\"?![],()~@#$%^&*_+-={};<>/¥'
         yzm = ''.join([x for x in yzm if x not in exclude_char_list])
 
@@ -314,27 +270,32 @@ class login(QThread):
         self.ocr_signal.emit(str(self.yzm))
         time.sleep(1)
 
-    def doinput(self, yzmInput, mode=False):
+    def doinput(self, yzmInput, mode=False, auto_login=True):
         try:
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtyzm']").clear()
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtyzm']").send_keys(yzmInput)
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:ImageButton1']").click()
             time.sleep(1)
             if (not self.judge()):
-                self.run(2)
+                self.run(2, auto_login=auto_login)
             else:
-                self.show_yzm_signal.emit(0)
+
                 self.driver.refresh()
                 time.sleep(1)
                 self.monitor_signal.emit(self.driver.find_element_by_xpath('./*//title').get_attribute("innerText"))
                 if mode:
                     self.choseLesson()
                 else:
+                    self.show_yzm_signal.emit(0)
+                    self.monitor_signal.emit("[登录验证成功]")
+
                     self.monitor()
         except Exception as e:
-            self.monitor_signal.emit("[doinput]:" + str(e))
+            self.monitor_signal.emit("[登录账户错误]:" + str(e))
+        finally:  # TODO
+            self.run(auto_login=auto_login)
 
-    def doreport(self, yzmInput):
+    def doreport(self, yzmInput=""):
         try:
             self.driver.find_element_by_xpath("./*//input[@name='txtyzm']").clear()
             self.driver.find_element_by_xpath("./*//input[@name='txtyzm']").send_keys(yzmInput)
@@ -346,7 +307,7 @@ class login(QThread):
             self.judge()
             self.monitor()
         except Exception as e:
-            self.monitor_signal.emit("[doreport]:" + str(e))
+            self.monitor_signal.emit("[报名报告错误]:" + str(e))
 
     def quit(self):
         self.driver.quit()
@@ -369,6 +330,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.setupUi(self)
         self.start.clicked.connect(self.run)
         self.button_linkWeb.clicked.connect(self.link)
+
         self.button_txt.clicked.connect(self.overlook)
         self.stop.clicked.connect(self.stopAll)
         self.button_saveID.clicked.connect(self.saveID)
@@ -378,6 +340,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.flag = 0
         self.toaster = ToastNotifier()
         self.toastFlag = self.check_toast.isChecked()
+
         try:
             with open('cookie.txt', 'r') as f:
                 cookie = f.readlines()
@@ -459,7 +422,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def yzmLoad(self, flag, report_info=""):
         self.pic_yzm.setPixmap(QPixmap('code.png'))
-        {'0': lambda: self.Label_news.setText("登录成功\r\n开始监测"),
+        {'-1': lambda: self.Label_news.setText("请稍候..."),
+         '0': lambda: self.Label_news.setText("登录成功\r\n开始监测"),
          '1': lambda: self.Label_news.setText("请输入验证码\r\n然后按下回车"),
          '2': lambda: self.Label_news.setText("登录失败\r\n请检查帐号密码并重试"),
          '4': lambda: self.Label_news.setText("检测到可抢报告\r\n请输入验证码"),
@@ -482,7 +446,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 threading.Thread(target=self.thread.doreport, args=(self.Line_yzm.text(),)).start()
             else:
                 threading.Thread(target=self.thread.doinput,
-                                 args=(self.Line_yzm.text(), self.menu_L.isChecked(),)).start()
+                                 args=(self.Line_yzm.text(),
+                                       self.menu_L.isChecked(),
+                                       self.ocr.isChecked())).start()
             self.Line_yzm.clear()
         except Exception as e:
             self.showMonitor("[验证码]: " + str(e))
