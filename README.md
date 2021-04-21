@@ -17,14 +17,14 @@ The affairs office for graduate student has always been telling out conference a
 with very rare notifications. The students no matter where are currently on campus 
 or have been stuck at home by the COVID 19 pandemic is not easy to sign up a conference 
 or report event. That is the inspiration of our efforts to develop a tool to 
-have a student had a chance to get a quota of attending report events when they are available.
+have students had a chance to get a quota of attending report events when they are coming up.
 
 Report-Monitor is not new. It was originally implemented 
 by [Satone](https://gitee.com/satone7/report-monitor).
 Satone's implementation is vey time-consuming when `auto login` option is used, 
 due to low accurate rate of image recognition of validation code. Hence, we develop
 a new Report-Monitor with a higher recognition rate. The majority of our efforts was
-spending on cropping and denoising images of validation codes. 
+spending on the cropping and denoising images of validation codes. 
 
 ## Features
 
@@ -36,6 +36,20 @@ spending on cropping and denoising images of validation codes.
 
 ## Installation
 
+* Packages requirements under Python version=3.7.10
+  + PyQt5
+  + Pillow
+  + opencv-python
+  + pytesseract  
+  + selenium
+  + win10toast
+  + pypiwin32
+  + jupyterlab 
+  + pyinstaller
+  + matplotlib
+  
+* convert python script `ReportMonitor.py` to executable `.exe` using  
+  commands `pyinstaller -F -w -i icon.ico --add-data="cookie.txt;report-monitor" --add-data="overlook.txt;report-monitor" ReportMonitor.py`
 
 
 ## Acknowledgement

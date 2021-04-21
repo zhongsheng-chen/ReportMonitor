@@ -113,3 +113,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# associated files when generating executable .exe file.
+.spec
+.exe
+/dist
+/build

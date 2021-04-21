@@ -428,7 +428,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
          '2': lambda: self.Label_news.setText("登录失败\r\n请检查帐号密码并重试"),
          '4': lambda: self.Label_news.setText("检测到可抢报告\r\n请输入验证码"),
          '5': lambda: self.Label_news.setText("有抢到的报告\r\n请登录网站查看"),
-         '9': lambda: self.Label_news.setText("error")}[
+         '9': lambda: self.Label_news.setText("登录异常")}[
             str(flag)]()
         self.flag = flag
         if self.ocr.isChecked() is True and flag != 0 and flag != 5:
