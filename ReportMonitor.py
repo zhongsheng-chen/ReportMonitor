@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+from Logger import Logger
 import sys
 import os
 from selenium import webdriver
@@ -15,18 +16,23 @@ from ReportMonitor_UI import Ui_MainWindow
 import threading
 from win10toast import ToastNotifier
 from Notification import send_notification
+from datetime import datetime
 from collections import defaultdict
+from selenium.common.exceptions import TimeoutException
+from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import UnexpectedAlertPresentException
 import winsound
 import string
 import cv2
 
 goalurl = "yjsy.buct.edu.cn:8080"
+log = Logger('log.log')
 
 
-class login(QThread):
-    show_yzm_signal = pyqtSignal(int)
+class Login(QThread):
+    ask_feedback_signal = pyqtSignal(int)
     monitor_signal = pyqtSignal(str)
-    ocr_signal = pyqtSignal(str)
+    captcha_signal = pyqtSignal(str)
     toast_signal = pyqtSignal(str, int)
 
     user = 0
@@ -48,14 +54,14 @@ class login(QThread):
         self.aElement = self.driver.find_element_by_xpath('./*//title')
         print(self.aElement.get_attribute("innerText"))
 
-        self.yzm = ""
-        self.flagFirst = True
+        self.captcha = "captcha"
+        self.flag_first = True
         return super().__init__(*args, **kwargs)
 
     def __del__(self):
-        self.flagFirst = True
+        self.flag_first = True
 
-    def run(self, i=1, user=0, password=0, auto_login=False):
+    def run(self, i=1, user=0, password=0):
 
         if (user != 0) and (password != 0):
             self.user = user
@@ -67,28 +73,25 @@ class login(QThread):
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").clear()
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").send_keys(self.password)
             self.driver.get_screenshot_as_file('screenshot.png')
-            yzmElement = self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtyzm']/../img")
-            left = int(yzmElement.location['x'])
-            top = int(yzmElement.location['y'])
-            right = int(yzmElement.location['x'] + yzmElement.size['width'])
-            bottom = int(yzmElement.location['y'] + yzmElement.size['height'])
+            captcha_element = self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtyzm']/../img")
+            left = int(captcha_element.location['x'])
+            top = int(captcha_element.location['y'])
+            right = int(captcha_element.location['x'] + captcha_element.size['width'])
+            bottom = int(captcha_element.location['y'] + captcha_element.size['height'])
             img = Image.open('screenshot.png')
             img = img.crop((left + 1, top + 1, right - 1, bottom - 1))
             img.save('code.png')
 
-            # if manually login
-            if auto_login:
-                self.show_yzm_signal.emit(2)
-            else:
-                self.show_yzm_signal.emit(1)
+            self.ask_feedback_signal.emit(i)
 
-        # except:
-        except Exception as e:
-            self.monitor_signal.emit("[登录错误]:" + str(e))
-            self.show_yzm_signal.emit(9)
+        except Exception as e:  # TODO
+            self.ask_feedback_signal.emit(9)
+            log.logger.error(e)
 
-    def yzmCrop(self):
-        # ## Zhongsheng modified on 15th April, 2021
+    def captcha_cropping(self):
+
+        # Zhongsheng modified on 15th April, 2021.
+
         self.driver.maximize_window()
         current_window_size = self.driver.get_window_size()
         width = current_window_size["width"]
@@ -96,21 +99,20 @@ class login(QThread):
         self.driver.set_window_size(width, height)
 
         self.driver.get_screenshot_as_file('screenshot.png')
-        yzmElement = self.driver.find_element_by_xpath("./*//input[@name='txtyzm']/../img")
-        bottomTable = self.driver.find_element_by_xpath("./*//table[@id='Table2']/tbody/tr[3]")
+        captcha_element = self.driver.find_element_by_xpath("./*//input[@name='txtyzm']/../img")
         img = Image.open('screenshot.png')
-        left = int(yzmElement.location['x'])
-        if int(yzmElement.location['y'] + yzmElement.size['height']) > img.height:
+        left = int(captcha_element.location['x'])
+        if int(captcha_element.location['y'] + captcha_element.size['height']) > img.height:
             bottom = img.height
         else:
-            bottom = int(yzmElement.location['y'] + yzmElement.size['height'])
-        top = bottom - yzmElement.size['height']
-        right = int(yzmElement.location['x'] + yzmElement.size['width'])
+            bottom = int(captcha_element.location['y'] + captcha_element.size['height'])
+        top = bottom - captcha_element.size['height']
+        right = int(captcha_element.location['x'] + captcha_element.size['width'])
 
         print((left, top, right, bottom))
         img = img.crop((left + 1, top + 1, right - 1, bottom - 1))
         img.save('code.png')
-        self.show_yzm_signal.emit(4)
+        self.ask_feedback_signal.emit(4)
         self.toast_signal.emit("有可抢报告，请输入验证码！", -1)
 
     def monitor(self):
@@ -120,40 +122,41 @@ class login(QThread):
         self.driver.execute_script("arguments[0].scrollIntoView(false);", target)  # 拖动到可见的元素去
 
         i = 1
-        while (1):
-            reportList = self.driver.find_elements_by_xpath("./*//img[@alt='我要报名']")
-            string = str(i) + ' '
-            for each in reportList:
+        while 1:
+            reports = self.driver.find_elements_by_xpath("./*//img[@alt='我要报名']")
+            string = f"第{i}次监听..."
+            for report in reports:
                 leapflag = False
-                maxNum = each.find_element_by_xpath("../../../td[7]").get_attribute("innerText")
-                nowNum = each.find_element_by_xpath("../../../td[8]").get_attribute("innerText")
-                if nowNum < maxNum:
-                    reportName = each.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+                max_num = report.find_element_by_xpath("../../../td[7]").get_attribute("innerText")
+                now_num = report.find_element_by_xpath("../../../td[8]").get_attribute("innerText")
+                if now_num < max_num:
+                    report_name = report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
                     with open('overlook.txt', 'r') as f:
                         for x in f.readlines():
-                            if reportName == x[:-1]:
+                            if report_name == x[:-1]:
                                 leapflag = True
-                                string = string + reportName + " 在屏蔽列表中，不选择。"
+                                string = string + report_name + " 在屏蔽列表中，不选择。"
                     if leapflag == False:
-                        report_name = each.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
-                        report_date = each.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
-                        report_location = each.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
-                        report_availability = str(int(maxNum) - int(nowNum))
+                        report_name = report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+                        report_date = report.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
+                        report_location = report.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
+                        report_availability = str(int(max_num) - int(now_num))
                         report_info = f"报告名称：{report_name}\r\n报告时间：{report_date}\r\n" \
                                       f"报告地点：{report_location}\r\n可报名人数：{report_availability}"
 
                         self.monitor_signal.emit(string + f"！有可抢报告...\r\n" + report_info)
-                        self.yzmCrop()
-                        self.aElement = each
+                        self.captcha_cropping()
+                        self.aElement = report
                         winsound.Beep(600, 3000)
-                        send_notification(f"发现报告...\r\n" + report_info)
+                        send_notification(f"发现报告...\r\n" + report)
+                        log.logger.info(f"发现报告...\r\n" + report)
                         return
 
             try:
                 previous_report_list = self.driver.find_elements_by_xpath("./*//img[@alt='提交心得']")
             except:
                 previous_report_list = []
-            if (len(previous_report_list) - len(self.report_list)) == 1 and self.flagFirst is False:
+            if (len(previous_report_list) - len(self.report_list)) == 1 and self.flag_first is False:
                 new_report = list(filter(lambda report: report not in previous_report_list, self.report_list))[0]
                 new_report_name = new_report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
                 new_report_date = new_report.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
@@ -162,45 +165,46 @@ class login(QThread):
                                   f"报告时间：{new_report_date}\r\n" \
                                   f"报告地点：{new_report_location}"
 
-                self.show_yzm_signal.emit(5, f"已经抢到报告...\r\n" + new_report_info)
+                self.ask_feedback_signal.emit(5, f"已经抢到报告...\r\n" + new_report_info)
+                log.logger.info(f"已经抢到报告...\r\n" + new_report_info)
             self.report_list = previous_report_list
-            self.flagFirst = False
+            self.flag_first = False
 
             self.monitor_signal.emit(string)
             time.sleep(1)
             i = i + 1
             self.driver.refresh()
 
-    def choseLesson(self):
+    def chose_lesson(self):
         url = "http://" + goalurl + "/PYXX/pygl/pyjhxk.aspx?xh=" + self.user
         self.driver.get(url)
         i = 1
-        while (1):
+        while 1:
             n = 0
-            lessonList = self.driver.find_elements_by_xpath("./*//img[@alt='选择当前课程']")
-            if lessonList == []:
+            lesson_list = self.driver.find_elements_by_xpath("./*//img[@alt='选择当前课程']")
+            if lesson_list == []:
                 self.monitor_signal.emit("没有可选课程,已结束检测。")
                 return
             string = str(i) + ' '
-            for each in lessonList:
-                lessonName = each.find_element_by_xpath("../../../td[5]").get_attribute("innerText")
-                lessonRoom = each.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
-                lessonTime = each.find_element_by_xpath("../../../td[7]").get_attribute("innerText")
-                lessonStatus = each.find_element_by_xpath("../../../td[12]").get_attribute("innerText")
-                if "未满" in lessonStatus:
+            for lesson in lesson_list:
+                lesson_name = lesson.find_element_by_xpath("../../../td[5]").get_attribute("innerText")
+                lesson_room = lesson.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+                lesson_data = lesson.find_element_by_xpath("../../../td[7]").get_attribute("innerText")
+                lesson_status = lesson.find_element_by_xpath("../../../td[12]").get_attribute("innerText")
+                if "未满" in lesson_status:
                     with open('choseLesson.txt', 'r') as f:
                         for x in f.readlines():
-                            if lessonName == x[:-1]:
-                                self.monitor_signal.emit(string + lessonName + "检测到未满，尝试选择。")
-                                each.click()
+                            if lesson_name == x[:-1]:
+                                self.monitor_signal.emit(string + lesson_name + "检测到未满，尝试选择。")
+                                lesson.click()
                                 time.sleep(1)
                                 self.judge()
                                 break
                                 # if self.examine(x,url):
-                                #    self.monitor_signal.emit(string + lessonName +"选课成功。")
-                                #    self.toast_signal.emit(lessonName+"  选课成功！",-1)
+                                #    self.monitor_signal.emit(string + lesson_name +"选课成功。")
+                                #    self.toast_signal.emit(lesson_name+"  选课成功！",-1)
                                 # else:
-                                #    self.toast_signal.emit(lessonName+"  检测到未满。",5)
+                                #    self.toast_signal.emit(lesson_name+"  检测到未满。",5)
                 else:
                     n = n + 1
                     pass
@@ -209,25 +213,25 @@ class login(QThread):
             i = i + 1
             self.driver.get(url)
 
-    def examine(self, cLessonName, url):
-        try:
-            self.driver.get(url)
-            lessonList = self.driver.find_elements_by_xpath("./*//img[@alt='退选当前课程']")
-            for each in lessonList:
-                lessonName = each.find_element_by_xpath("../../../td[5]").get_attribute("innerText")
-                print(lessonName)
-                if cLessonName == lessonName:
-                    return True
-            return False
-        except Exception as e:
-            self.monitor_signal.emit("[examine]:" + str(e))
-            return False
+    # def examine(self, cLessonName, url):
+    #     try:
+    #         self.driver.get(url)
+    #         lessonList = self.driver.find_elements_by_xpath("./*//img[@alt='退选当前课程']")
+    #         for each in lessonList:
+    #             lessonName = each.find_element_by_xpath("../../../td[5]").get_attribute("innerText")
+    #             print(lessonName)
+    #             if cLessonName == lessonName:
+    #                 return True
+    #         return False
+    #     except Exception as e:
+    #         self.monitor_signal.emit("[examine]:" + str(e))
+    #         return False
 
     def judge(self):
-        return self._judgeWait()
+        return self._judge()
 
-    def _judgeWait(self):
-        while (1):
+    def _judge(self):
+        while 1:
             try:
                 # cookie_items = self.driver.get_cookies()
                 # post={}
@@ -237,14 +241,14 @@ class login(QThread):
                 # with open('cookie.txt', 'w+', encoding='utf-8') as f:
                 #    f.write(cookie_str)
                 # time.sleep(2)
-                temp = self.driver.get_cookies()
-                print("come here and temp: ", temp)
+                all_cookies = self.driver.get_cookies()
+                print("All cookies are ", all_cookies)
                 return True
             except:
                 try:
                     # al=self.driver.switch_to_alert()
                     al = self.driver.switch_to.alert()
-                    print("come here and alert")
+                    print("Driver alert")
                     al.accept()
                     return False
                 except:
@@ -257,48 +261,55 @@ class login(QThread):
         img = cv2.inRange(img, lowerb=180, upperb=255)
         cv2.imwrite('code_denoise.png', img)
         img = Image.fromarray(img)
-        yzm = pytesseract.image_to_string(img)
+        captcha = pytesseract.image_to_string(img)
         exclude_char_list = ' .·:`‘、“\\|\'\"?![],()~@#$%^&*_+-={};<>/¥'
-        yzm = ''.join([x for x in yzm if x not in exclude_char_list])
+        captcha = ''.join([ch for ch in captcha if ch not in exclude_char_list])
 
         whitespace = ['\f', '\n', '\r', '\t', '\v', '\u00A0', '\u2028', '\u2029']
-        yzm = ''.join(filter(lambda x: x not in whitespace, filter(lambda x: x in string.printable, yzm))).strip(
+        captcha = ''.join(
+            filter(lambda x: x not in whitespace, filter(lambda x: x in string.printable, captcha))).strip(
             ' \r\n\f\t\b\v\0')
 
-        self.yzm = yzm
-        self.monitor_signal.emit("识别验证码：" + self.yzm)
-        self.ocr_signal.emit(str(self.yzm))
+        if len(captcha):
+            captcha = "captcha"
+
+        self.captcha = captcha
+        self.monitor_signal.emit("识别验证码：" + self.captcha)
+        self.captcha_signal.emit(str(self.captcha))
         time.sleep(1)
 
-    def doinput(self, yzmInput, mode=False, auto_login=True):
+    def do_input(self, captcha="captcha", mode=True):
         try:
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtyzm']").clear()
-            self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtyzm']").send_keys(yzmInput)
+            self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtyzm']").send_keys(captcha)
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:ImageButton1']").click()
             time.sleep(1)
-            if (not self.judge()):
-                self.run(2, auto_login=auto_login)
+            if not self.judge():
+                self.run(2)
             else:
 
                 self.driver.refresh()
                 time.sleep(1)
-                self.monitor_signal.emit(self.driver.find_element_by_xpath('./*//title').get_attribute("innerText"))
+
+                self.monitor_signal.emit(f"正在尝试打开...")
+                head = self.driver.find_element_by_xpath('./*//title').get_attribute("innerText")
+                self.monitor_signal.emit(f"[" + head.strip() + f"]" + f"打开成功.")
+
                 if mode:
-                    self.choseLesson()
-                else:
-                    self.show_yzm_signal.emit(0)
+                    self.ask_feedback_signal.emit(0)
                     self.monitor_signal.emit("[登录验证成功]")
 
                     self.monitor()
-        except Exception as e:
-            self.monitor_signal.emit("[登录账户错误]:" + str(e))
-        finally:  # TODO
-            self.run(auto_login=auto_login)
+                else:
+                    self.chose_lesson()
 
-    def doreport(self, yzmInput=""):
+        except UnexpectedAlertPresentException:
+            self.monitor_signal.emit("你输入的验证码错误！")
+
+    def do_report(self, captcha="captcha"):
         try:
             self.driver.find_element_by_xpath("./*//input[@name='txtyzm']").clear()
-            self.driver.find_element_by_xpath("./*//input[@name='txtyzm']").send_keys(yzmInput)
+            self.driver.find_element_by_xpath("./*//input[@name='txtyzm']").send_keys(captcha)
             self.aElement.click()
             time.sleep(0.5)
             alert = self.driver.switch_to.alert
@@ -307,151 +318,180 @@ class login(QThread):
             self.judge()
             self.monitor()
         except Exception as e:
-            self.monitor_signal.emit("[报名报告错误]:" + str(e))
+            self.monitor_signal.emit("[报名报告异常]:" + str(e))
 
     def quit(self):
         self.driver.quit()
 
+    def check_connection(self):
+        try:
 
-class creatLink(QThread):
-    creat_link_signal = pyqtSignal(login)
+            self.driver.get(self.driver.current_url)
+            return True
+        except WebDriverException:
+            try:
+                retries = 5
+                while retries > 0:
+                    try:
+                        self.driver.get(self.driver.current_url)
+                        break
+                    except Exception as e:
+
+                        Logger.warning('Unknown type of Exception.' + e)
+                        return False
+            except TimeoutException:
+
+                Logger.warning('TimeoutException when trying to reach page.')
+                return False
+
+
+class Connection(QThread):
+    creat_connection_signal = pyqtSignal(Login)
 
     def __init__(self, parent=None):
+        self.thread = Login()
         return super().__init__(parent)
 
     def run(self):
-        self.Thread = login()
-        self.creat_link_signal.emit(self.Thread)
+        self.creat_connection_signal.emit(self.thread)
 
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
         self.setupUi(self)
-        self.start.clicked.connect(self.run)
-        self.button_linkWeb.clicked.connect(self.link)
+        # self.button_start.clicked.connect(self.run)
+        self.button_start.clicked.connect(self._validate_captcha)
+        self.button_connect.clicked.connect(self.make_connection)
 
-        self.button_txt.clicked.connect(self.overlook)
-        self.stop.clicked.connect(self.stopAll)
-        self.button_saveID.clicked.connect(self.saveID)
-        self.check_toast.stateChanged.connect(self.__toastFlag)
-        # self.menu_doTest.triggered.connect(self.__choseLesson)
-        self.openWeb.setOpenExternalLinks(True)
+        self.button_block_list.clicked.connect(self.block_report)
+        self.button_stop.clicked.connect(self.stop_all)
+        self.button_save_account.clicked.connect(self.save_account)
+        self.check_toast.stateChanged.connect(self.__toast_flag)
+        # self.line_captcha.returnPressed.connect(self._validate_captcha)
+
         self.flag = 0
         self.toaster = ToastNotifier()
-        self.toastFlag = self.check_toast.isChecked()
+        self.toast_flag = self.check_toast.isChecked()
 
         try:
             with open('cookie.txt', 'r') as f:
                 cookie = f.readlines()
-                self.Line_stID.setText(cookie[0][:-1])
-                self.Line_password.setText(cookie[1])
+                self.line_student_id.setText(cookie[0][:-1])
+                self.line_password.setText(cookie[1])
         except Exception as e:
-            self.showMonitor("[cookie]: " + str(e))
+            self.show_monitor("[cookie文件异常]: " + str(e))
 
-    def __choseLesson(self):
-        threading.Thread(target=self.thread.choseLesson, args=()).start()
+    def __chose_lesson(self):
+        threading.Thread(target=self.thread.chose_lesson, args=()).start()
 
-    def _toast(self, string, sec=5):
-        if self.toastFlag:
+    def _toast(self, toast_str, sec=5):
+        if self.toast_flag:
             try:
-                if self.ocr.isChecked() is True:
+                if self.check_auto.isChecked() is True:
                     sec = 5
-                self.toaster.show_toast("ReportMonitor", string, icon_path='icon.ico', duration=sec, threaded=True)
-            except:
-                self.textBrowser.append(
-                    str(time.asctime(time.localtime(time.time())))[-13:-5] + " ：" + "弹出系统提示失败，内容：" + string)
+                self.toaster.show_toast("ReportMonitor", toast_str, icon_path='icon.ico', duration=sec, threaded=True)
+            except Exception as e:
+                self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + e)
 
-    def __toastFlag(self):
-        self.toastFlag = self.check_toast.isChecked()
+    def __toast_flag(self):
+        self.toast_flag = self.check_toast.isChecked()
         self._toast("通知已打开")
 
-    def saveID(self):
-        string = self.Line_stID.text() + "\n" + self.Line_password.text()
+    def save_account(self):
+        id_and_pwd = self.line_student_id.text() + "\n" + self.line_password.text()
         try:
             with open('cookie.txt', 'w+') as f:
-                f.write(string)
+                f.write(id_and_pwd)
             self._toast("帐号保存成功")
         except:
             self._toast("帐号保存失败")
 
-    def _link(self, x):
+    def _make_connection(self, x):
         self.thread = x
-        self.thread.show_yzm_signal.connect(self.yzmLoad)
-        self.thread.monitor_signal.connect(self.showMonitor)
-        self.thread.ocr_signal.connect(self.ocrWork)
+        self.thread.ask_feedback_signal.connect(self.ask_feedback)
+        self.thread.monitor_signal.connect(self.show_monitor)
+        self.thread.captcha_signal.connect(self.validate_captcha)
         self.thread.toast_signal.connect(self._toast)
-        self.Label_linkStatus.setText("已连接")
+        self.label_connection_status.setText("已连接")
 
-    def stopAll(self):
+        if self.thread.check_connection():
+            try:
+                self.run()
+            except:
+                try:
+                    self.run()
+                    print("第一组异常")
+                except:
+                    pass
+
+    def stop_all(self):
         try:
             self.thread.quit()
             self.retranslateUi(self)
-            self.Label_linkStatus.setText("连接断开")
+            self.label_connection_status.setText("连接断开")
             del self.thread
             del self.creat
         except Exception as e:
-            self.showMonitor("[Stop]: " + str(e))
+            self.show_monitor("[Stop]: " + str(e))
 
-    def ocrWork(self, string):
-        self.Line_yzm.setText(string)
-        self.yzmShow()
+    def validate_captcha(self, captcha):
+        self.line_captcha.setText(captcha)
+        self._validate_captcha()
 
-    def showMonitor(self, string):
-        self.textBrowser.append(str(time.asctime(time.localtime(time.time())))[-13:-5] + " ：" + string)
+    def show_monitor(self, string):
+        self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ' + string)
 
-    def link(self):
+    def make_connection(self):
         try:
-            self.Label_linkStatus.setText("正在连接")
-            self.creat = creatLink()
+            self.label_connection_status.setText("正在连接")
+            self.creat = Connection()
             self.creat.start()
-            self.creat.creat_link_signal.connect(self._link)
-        except:
-            self.Label_linkStatus.setText("连接失败，请重试")
+            self.creat.creat_connection_signal.connect(self._make_connection)
+        except Exception as e:
+            self.label_connection_status.setText("连接失败，请重试" + e)
 
-    def overlook(self):
+    def block_report(self):
         threading.Thread(target=os.system, args=('overlook.txt',)).start()
 
     def run(self):
         try:
-            self.thread.user = self.Line_stID.text()
-            self.thread.password = self.Line_password.text()
+            self.thread.user = self.line_student_id.text()
+            self.thread.password = self.line_password.text()
             self.thread.start()
         except:
-            self.textBrowser.append(str(time.asctime(time.localtime(time.time())))[-13:-5] + " ：" + "还没有连接到网站")
+            self.text_info_board.append(str(time.asctime(time.localtime(time.time())))[-13:-5] + " ：" + "还没有连接到网站")
 
-    def yzmLoad(self, flag, report_info=""):
-        self.pic_yzm.setPixmap(QPixmap('code.png'))
-        {'-1': lambda: self.Label_news.setText("请稍候..."),
-         '0': lambda: self.Label_news.setText("登录成功\r\n开始监测"),
-         '1': lambda: self.Label_news.setText("请输入验证码\r\n然后按下回车"),
-         '2': lambda: self.Label_news.setText("登录失败\r\n请检查帐号密码并重试"),
-         '4': lambda: self.Label_news.setText("检测到可抢报告\r\n请输入验证码"),
-         '5': lambda: self.Label_news.setText("有抢到的报告\r\n请登录网站查看"),
-         '9': lambda: self.Label_news.setText("登录异常")}[
+    def ask_feedback(self, flag, report_info=""):
+        self.label_captcha_pic.setPixmap(QPixmap('code.png'))
+        {'-1': lambda: self.label_feedback.setText("请稍候..."),
+         '0': lambda: self.label_feedback.setText("登录成功\r\n开始监测"),
+         '1': lambda: self.label_feedback.setText("请输入验证码\r\n然后按下回车"),
+         '2': lambda: self.label_feedback.setText("登录失败\r\n请检查帐号密码并重试"),
+         '4': lambda: self.label_feedback.setText("检测到可抢报告\r\n请输入验证码"),
+         '5': lambda: self.label_feedback.setText("有抢到的报告\r\n请登录网站查看"),
+         '9': lambda: self.label_feedback.setText("登录异常")}[
             str(flag)]()
         self.flag = flag
-        if self.ocr.isChecked() is True and flag != 0 and flag != 5:
+        if self.check_auto.isChecked() is True and flag != 0 and flag != 5:
             threading.Thread(target=self.thread.ocr).start()
-        # if flag==0:
-        #    self.openWeb.setText("<A href='http://202.4.152.190:8080/pyxx/Default.aspx'>教务网</a>")
+
         if flag == 5:
             self._toast("有成功抢到的报告，请自行登录研究生管理系统查看详情。", -1)
             send_notification(report_info)
 
-    def yzmShow(self):
+    def _validate_captcha(self):
         try:
-            self.Label_news.setText("请稍候")
+            self.label_feedback.setText("请稍候")
             if self.flag == 4:
-                threading.Thread(target=self.thread.doreport, args=(self.Line_yzm.text(),)).start()
+                threading.Thread(target=self.thread.do_report, args=(self.line_captcha.text(),)).start()
             else:
-                threading.Thread(target=self.thread.doinput,
-                                 args=(self.Line_yzm.text(),
-                                       self.menu_L.isChecked(),
-                                       self.ocr.isChecked())).start()
-            self.Line_yzm.clear()
+                threading.Thread(target=self.thread.do_input,
+                                 args=(self.line_captcha.text(),
+                                       self.menu_report.isChecked(),)).start()
+            self.line_captcha.clear()
         except Exception as e:
-            self.showMonitor("[验证码]: " + str(e))
+            self.show_monitor("[验证码]: " + str(e))
 
 
 if __name__ == '__main__':

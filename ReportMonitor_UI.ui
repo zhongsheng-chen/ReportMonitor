@@ -20,7 +20,7 @@
   <widget class="QWidget" name="centralwidget">
    <layout class="QGridLayout" name="gridLayout">
     <item row="7" column="0" colspan="4">
-     <widget class="QLabel" name="Label_news">
+     <widget class="QLabel" name="label_feedback">
       <property name="font">
        <font>
         <pointsize>16</pointsize>
@@ -41,7 +41,7 @@
      </widget>
     </item>
     <item row="2" column="3">
-     <widget class="QLabel" name="Label_yzm">
+     <widget class="QLabel" name="label_captcha">
       <property name="font">
        <font>
         <pointsize>16</pointsize>
@@ -56,7 +56,7 @@
      </widget>
     </item>
     <item row="2" column="0">
-     <widget class="QLabel" name="Label_stID">
+     <widget class="QLabel" name="label_student_id">
       <property name="font">
        <font>
         <pointsize>16</pointsize>
@@ -71,24 +71,24 @@
      </widget>
     </item>
     <item row="3" column="3">
-     <widget class="QPushButton" name="button_saveID">
+     <widget class="QPushButton" name="button_save_account">
       <property name="text">
        <string>设为默认帐号</string>
       </property>
      </widget>
     </item>
     <item row="3" column="1">
-     <widget class="QLineEdit" name="Line_password">
+     <widget class="QLineEdit" name="line_password">
       <property name="echoMode">
        <enum>QLineEdit::PasswordEchoOnEdit</enum>
       </property>
      </widget>
     </item>
     <item row="2" column="1">
-     <widget class="QLineEdit" name="Line_stID"/>
+     <widget class="QLineEdit" name="line_student_id"/>
     </item>
     <item row="3" column="0">
-     <widget class="QLabel" name="Label_password">
+     <widget class="QLabel" name="label_password">
       <property name="font">
        <font>
         <pointsize>16</pointsize>
@@ -103,7 +103,7 @@
      </widget>
     </item>
     <item row="2" column="7">
-     <widget class="QLabel" name="pic_yzm">
+     <widget class="QLabel" name="label_captcha_pic">
       <property name="minimumSize">
        <size>
         <width>64</width>
@@ -122,14 +122,14 @@
      </widget>
     </item>
     <item row="6" column="0">
-     <widget class="QPushButton" name="button_linkWeb">
+     <widget class="QPushButton" name="button_connect">
       <property name="text">
        <string>连接网站</string>
       </property>
      </widget>
     </item>
     <item row="3" column="7">
-     <widget class="QCheckBox" name="ocr">
+     <widget class="QCheckBox" name="check_auto">
       <property name="font">
        <font>
         <pointsize>16</pointsize>
@@ -141,31 +141,31 @@
      </widget>
     </item>
     <item row="8" column="0" rowspan="2" colspan="8">
-     <widget class="QLabel" name="label">
+     <widget class="QLabel" name="label_promote">
       <property name="text">
-       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;use at free&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;内部使用&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
       </property>
      </widget>
     </item>
     <item row="2" column="5" colspan="2">
-     <widget class="QLineEdit" name="Line_yzm"/>
+     <widget class="QLineEdit" name="line_captcha"/>
     </item>
     <item row="3" column="5" colspan="2">
-     <widget class="QPushButton" name="start">
+     <widget class="QPushButton" name="button_start">
       <property name="text">
        <string>开始</string>
       </property>
      </widget>
     </item>
     <item row="6" column="6">
-     <widget class="QPushButton" name="button_txt">
+     <widget class="QPushButton" name="button_block_list">
       <property name="text">
        <string>屏蔽列表</string>
       </property>
      </widget>
     </item>
     <item row="6" column="5">
-     <widget class="QPushButton" name="stop">
+     <widget class="QPushButton" name="button_stop">
       <property name="text">
        <string>停止</string>
       </property>
@@ -190,10 +190,10 @@
      </widget>
     </item>
     <item row="7" column="5" colspan="2">
-     <widget class="QTextBrowser" name="textBrowser"/>
+     <widget class="QTextBrowser" name="text_info_board"/>
     </item>
     <item row="6" column="1" colspan="2">
-     <widget class="QLabel" name="Label_linkStatus">
+     <widget class="QLabel" name="label_connection_status">
       <property name="font">
        <font>
         <pointsize>16</pointsize>
@@ -205,7 +205,7 @@
      </widget>
     </item>
     <item row="6" column="3">
-     <widget class="QLabel" name="openWeb">
+     <widget class="QLabel" name="label_to_website">
       <property name="text">
        <string>&lt;A href='http://202.4.152.190:8080/pyxx/Default.aspx'&gt;教务网&lt;/a&gt;</string>
       </property>
@@ -229,13 +229,13 @@
     <property name="title">
      <string>监测任务</string>
     </property>
-    <addaction name="menu_RM"/>
-    <addaction name="menu_L"/>
+    <addaction name="menu_report"/>
+    <addaction name="menu_lesson"/>
    </widget>
    <addaction name="menu"/>
   </widget>
   <widget class="QStatusBar" name="statusbar"/>
-  <action name="menu_RM">
+  <action name="menu_report">
    <property name="checkable">
     <bool>true</bool>
    </property>
@@ -246,7 +246,7 @@
     <string>ReportMonitor</string>
    </property>
   </action>
-  <action name="menu_L">
+  <action name="menu_lesson">
    <property name="checkable">
     <bool>true</bool>
    </property>
@@ -256,14 +256,14 @@
   </action>
  </widget>
  <tabstops>
-  <tabstop>Line_stID</tabstop>
-  <tabstop>Line_password</tabstop>
-  <tabstop>Line_yzm</tabstop>
+  <tabstop>line_student_id</tabstop>
+  <tabstop>line_password</tabstop>
+  <tabstop>line_captcha</tabstop>
  </tabstops>
  <resources/>
  <connections>
   <connection>
-   <sender>Line_yzm</sender>
+   <sender>line_captcha</sender>
    <signal>returnPressed()</signal>
    <receiver>MainWindow</receiver>
    <slot>yzmShow()</slot>

@@ -33,7 +33,6 @@ spending on the cropping and denoising images of validation codes.
 * More effective preprocess to denoise validation code images.
 
 
-
 ## Installation
 
 * Packages requirements under Python version=3.7.10
