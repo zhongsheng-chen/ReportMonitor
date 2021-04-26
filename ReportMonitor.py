@@ -35,6 +35,8 @@ class Login(QThread):
     captcha_signal = pyqtSignal(str)
     toast_signal = pyqtSignal(str, int)
 
+    disable_start_button_signal = pyqtSignal()
+
     user = 0
     password = 0
     option = webdriver.ChromeOptions()
@@ -46,13 +48,9 @@ class Login(QThread):
     def __init__(self, *args, **kwargs):
         self.driver = webdriver.Chrome(options=self.option)
         self.driver.get("http://" + goalurl + "/pyxx/login.aspx")
-        self.driver.maximize_window()
-        current_window_size = self.driver.get_window_size()
-        width = current_window_size["width"]
-        height = current_window_size["height"]
-        self.driver.set_window_size(width, height)
-        self.aElement = self.driver.find_element_by_xpath('./*//title')
-        print(self.aElement.get_attribute("innerText"))
+
+        self.page_element = self.driver.find_element_by_xpath('./*//title')
+        print(self.page_element.get_attribute("innerText"))
 
         self.captcha = "captcha"
         self.flag_first = True
@@ -72,16 +70,8 @@ class Login(QThread):
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").send_keys(self.user)
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").clear()
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").send_keys(self.password)
-            self.driver.get_screenshot_as_file('screenshot.png')
-            captcha_element = self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtyzm']/../img")
-            left = int(captcha_element.location['x'])
-            top = int(captcha_element.location['y'])
-            right = int(captcha_element.location['x'] + captcha_element.size['width'])
-            bottom = int(captcha_element.location['y'] + captcha_element.size['height'])
-            img = Image.open('screenshot.png')
-            img = img.crop((left + 1, top + 1, right - 1, bottom - 1))
-            img.save('code.png')
 
+            self.login_captcha_cropping()
             self.ask_feedback_signal.emit(i)
 
         except Exception as e:  # TODO
@@ -92,28 +82,9 @@ class Login(QThread):
 
         # Zhongsheng modified on 15th April, 2021.
 
-        self.driver.maximize_window()
-        current_window_size = self.driver.get_window_size()
-        width = current_window_size["width"]
-        height = current_window_size["height"]
-        self.driver.set_window_size(width, height)
-
+        self._reset_max_window()
         self.driver.get_screenshot_as_file('screenshot.png')
-        captcha_element = self.driver.find_element_by_xpath("./*//input[@name='txtyzm']/../img")
-        img = Image.open('screenshot.png')
-        left = int(captcha_element.location['x'])
-        if int(captcha_element.location['y'] + captcha_element.size['height']) > img.height:
-            bottom = img.height
-        else:
-            bottom = int(captcha_element.location['y'] + captcha_element.size['height'])
-        top = bottom - captcha_element.size['height']
-        right = int(captcha_element.location['x'] + captcha_element.size['width'])
-
-        print((left, top, right, bottom))
-        img = img.crop((left + 1, top + 1, right - 1, bottom - 1))
-        img.save('code.png')
-        self.ask_feedback_signal.emit(4)
-        self.toast_signal.emit("有可抢报告，请输入验证码！", -1)
+        self._cropping("./*//input[@name='txtyzm']/../img")
 
     def monitor(self):
         url = "http://" + goalurl + "/pyxx/txhdgl/hdlist.aspx?xh=" + self.user
@@ -146,7 +117,7 @@ class Login(QThread):
 
                         self.monitor_signal.emit(string + f"！有可抢报告...\r\n" + report_info)
                         self.captcha_cropping()
-                        self.aElement = report
+                        self.page_element = report
                         winsound.Beep(600, 3000)
                         send_notification(f"发现报告...\r\n" + report)
                         log.logger.info(f"发现报告...\r\n" + report)
@@ -284,11 +255,11 @@ class Login(QThread):
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtyzm']").send_keys(captcha)
             self.driver.find_element_by_xpath("./*//input[@name='_ctl0:ImageButton1']").click()
             time.sleep(1)
-            if not self.judge():
-                self.run(2)
-            else:
+
+            if self.judge():
 
                 self.driver.refresh()
+                self.driver.get_screenshot_as_file('screenshot_after_refresh_indo_input.png')
                 time.sleep(1)
 
                 self.monitor_signal.emit(f"正在尝试打开...")
@@ -297,20 +268,36 @@ class Login(QThread):
 
                 if mode:
                     self.ask_feedback_signal.emit(0)
+                    self.disable_start_button_signal.emit()
                     self.monitor_signal.emit("[登录验证成功]")
 
                     self.monitor()
                 else:
                     self.chose_lesson()
 
-        except UnexpectedAlertPresentException:
-            self.monitor_signal.emit("你输入的验证码错误！")
+                return True
+
+            else:
+
+                self.monitor_signal.emit("[登录验证失败]")
+                return False
+
+        # except UnexpectedAlertPresentException:  # TODO
+        #     self.monitor_signal.emit("你输入的验证码错误！")
+        except Exception as e:
+
+            print(str(e))
+            if "你输入的验证码错误" in str(e):
+                self.monitor_signal.emit("你输入的验证码错误")
+            if "用户名不存在" in str(e):
+                self.monitor_signal.emit("用户名不存在")
+            return False
 
     def do_report(self, captcha="captcha"):
         try:
             self.driver.find_element_by_xpath("./*//input[@name='txtyzm']").clear()
             self.driver.find_element_by_xpath("./*//input[@name='txtyzm']").send_keys(captcha)
-            self.aElement.click()
+            self.page_element.click()
             time.sleep(0.5)
             alert = self.driver.switch_to.alert
             alert.accept()
@@ -343,6 +330,28 @@ class Login(QThread):
 
                 Logger.warning('TimeoutException when trying to reach page.')
                 return False
+
+    def _cropping(self, element):
+        captcha_element = self.driver.find_element_by_xpath(element)
+        left = int(captcha_element.location['x'])
+        top = int(captcha_element.location['y'])
+        right = int(captcha_element.location['x'] + captcha_element.size['width'])
+        bottom = int(captcha_element.location['y'] + captcha_element.size['height'])
+        img = Image.open('screenshot.png')
+        img = img.crop((left + 1, top + 1, right - 1, bottom - 1))
+        img.save('code.png')
+
+    def login_captcha_cropping(self):
+        self._reset_max_window()
+        self.driver.get_screenshot_as_file('screenshot.png')
+        self._cropping("./*//input[@name='_ctl0:txtyzm']/../img")
+
+    def _reset_max_window(self):
+        self.driver.maximize_window()
+        current_window_size = self.driver.get_window_size()
+        width = current_window_size["width"]
+        height = current_window_size["height"]
+        self.driver.set_window_size(width, height)
 
 
 class Connection(QThread):
@@ -415,6 +424,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.thread.monitor_signal.connect(self.show_monitor)
         self.thread.captcha_signal.connect(self.validate_captcha)
         self.thread.toast_signal.connect(self._toast)
+        self.thread.disable_start_button_signal.connect(self._disable_start_button)
         self.label_connection_status.setText("已连接")
 
         if self.check_auto.isChecked():
@@ -422,7 +432,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         else:
             self.show_monitor("手动登录模式选定")
             self.run()
-
 
         # if self.thread.check_connection():
         #     try:
@@ -495,12 +504,18 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if self.flag == 4:
                 threading.Thread(target=self.thread.do_report, args=(self.line_captcha.text(),)).start()
             else:
-                threading.Thread(target=self.thread.do_input,
+                login = threading.Thread(target=self.thread.do_input,
                                  args=(self.line_captcha.text(),
                                        self.menu_report.isChecked(),)).start()
+
+            if login:
+                self.button_stop.setEnabled(False)
             self.line_captcha.clear()
         except Exception as e:
             self.show_monitor("[验证码]: " + str(e))
+
+    def _disable_start_button(self):
+        self.button_start.setEnabled(False)
 
 
 if __name__ == '__main__':
