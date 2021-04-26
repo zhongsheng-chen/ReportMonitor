@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>613</width>
-    <height>309</height>
+    <height>313</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -207,7 +207,7 @@
     <item row="6" column="3">
      <widget class="QLabel" name="label_to_website">
       <property name="text">
-       <string>&lt;A href='http://202.4.152.190:8080/pyxx/Default.aspx'&gt;教务网&lt;/a&gt;</string>
+       <string>&lt;A href='http://yjsy.buct.edu.cn:8080/pyxx/login.aspx'&gt;研究生管理系统&lt;/a&gt;</string>
       </property>
       <property name="alignment">
        <set>Qt::AlignCenter</set>
@@ -261,24 +261,7 @@
   <tabstop>line_captcha</tabstop>
  </tabstops>
  <resources/>
- <connections>
-  <connection>
-   <sender>line_captcha</sender>
-   <signal>returnPressed()</signal>
-   <receiver>MainWindow</receiver>
-   <slot>yzmShow()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>483</x>
-     <y>55</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>553</x>
-     <y>105</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
  <slots>
   <slot>yzmShow()</slot>
  </slots>

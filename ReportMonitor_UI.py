@@ -11,7 +11,7 @@ from PyQt5 import QtCore, QtGui, QtWidgets
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
-        MainWindow.resize(613, 309)
+        MainWindow.resize(613, 313)
         icon = QtGui.QIcon()
         icon.addPixmap(QtGui.QPixmap("LELIEL.ico"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
         MainWindow.setWindowIcon(icon)
@@ -132,7 +132,6 @@ class Ui_MainWindow(object):
         self.menubar.addAction(self.menu.menuAction())
 
         self.retranslateUi(MainWindow)
-        # self.line_captcha.returnPressed.connect(MainWindow.show_captcha)  # TODO
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
         MainWindow.setTabOrder(self.line_student_id, self.line_password)
         MainWindow.setTabOrder(self.line_password, self.line_captcha)
@@ -153,8 +152,18 @@ class Ui_MainWindow(object):
         self.button_stop.setText(_translate("MainWindow", "停止"))
         self.check_toast.setText(_translate("MainWindow", "通知"))
         self.label_connection_status.setText(_translate("MainWindow", "未连接"))
-        self.label_to_website.setText(_translate("MainWindow", "<A href=\'http://202.4.152.190:8080/pyxx/Default.aspx\'>教务网</a>"))
+        self.label_to_website.setText(_translate("MainWindow", "<A href=\'http://yjsy.buct.edu.cn:8080/pyxx/login.aspx\'>研究生管理系统</a>"))
         self.menu.setTitle(_translate("MainWindow", "监测任务"))
         self.menu_report.setText(_translate("MainWindow", "ReportMonitor"))
         self.menu_lesson.setText(_translate("MainWindow", "Lesson"))
+
+
+if __name__ == "__main__":
+    import sys
+    app = QtWidgets.QApplication(sys.argv)
+    MainWindow = QtWidgets.QMainWindow()
+    ui = Ui_MainWindow()
+    ui.setupUi(MainWindow)
+    MainWindow.show()
+    sys.exit(app.exec_())
 

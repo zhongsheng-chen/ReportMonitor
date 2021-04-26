@@ -119,3 +119,15 @@ dmypy.json
 .exe
 /dist
 /build
+
+# Generated files
+cookie.txt
+overlook.txt
+code.png
+code_denoise.png
+screenshot.png
+
+# git
+.DS_Store
+.idea
+.vscode

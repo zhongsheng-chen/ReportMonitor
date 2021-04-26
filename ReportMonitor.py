@@ -370,6 +370,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.check_toast.stateChanged.connect(self.__toast_flag)
         # self.line_captcha.returnPressed.connect(self._validate_captcha)
 
+        self.label_to_website.setOpenExternalLinks(True)
+
         self.flag = 0
         self.toaster = ToastNotifier()
         self.toast_flag = self.check_toast.isChecked()
@@ -415,15 +417,22 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.thread.toast_signal.connect(self._toast)
         self.label_connection_status.setText("已连接")
 
-        if self.thread.check_connection():
-            try:
-                self.run()
-            except:
-                try:
-                    self.run()
-                    print("第一组异常")
-                except:
-                    pass
+        if self.check_auto.isChecked():
+            pass
+        else:
+            self.show_monitor("手动登录模式选定")
+            self.run()
+
+
+        # if self.thread.check_connection():
+        #     try:
+        #         self.run()
+        #     except:
+        #         try:
+        #             self.run()
+        #             print("第一组异常")
+        #         except:
+        #             pass
 
     def stop_all(self):
         try:
