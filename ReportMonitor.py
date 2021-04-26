@@ -1,34 +1,46 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from Logger import Logger
-import sys
 import os
-from selenium import webdriver
-import json
-from PIL import Image
-import pytesseract
-import time
-from PyQt5.QtCore import *
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import *
-
-from PyQt5 import QtCore
-from ReportMonitor_UI import Ui_MainWindow
+import string
+import sys
 import threading
-from win10toast import ToastNotifier
-from Notification import send_notification
+import time
 from datetime import datetime
-from collections import defaultdict
+
+import cv2
+import pytesseract
+import winsound
+from PIL import Image
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import WebDriverException
-from selenium.common.exceptions import UnexpectedAlertPresentException
-import winsound
-import string
-import cv2
+from win10toast import ToastNotifier
+
+from Logger import Logger
+from Notification import send_notification
+from ReportMonitor_UI import Ui_MainWindow
 
 goalurl = "yjsy.buct.edu.cn:8080"
 log = Logger('log.log')
+
+
+class UserNotExistError(Exception):
+    def __init__(self, err="用户名不存在"):
+        Exception.__init__(self, err)
+
+
+class ValidCaptchaError(Exception):
+    def __init__(self, err="验证码非法"):
+        Exception.__init__(self, err)
+
+
+class CaptchaWrongError(Exception):
+    def __init__(self, err="验证码错误"):
+        Exception.__init__(self, err)
 
 
 class Login(QThread):
@@ -38,6 +50,7 @@ class Login(QThread):
     toast_signal = pyqtSignal(str, int)
 
     disable_start_button_signal = pyqtSignal()
+    refresh_captcha_signal = pyqtSignal()
 
     user = 0
     password = 0
@@ -79,7 +92,6 @@ class Login(QThread):
         self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").send_keys(self.user)
         self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").clear()
         self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").send_keys(self.password)
-
 
     def captcha_cropping(self):
         self._reset_max_window()
@@ -246,7 +258,9 @@ class Login(QThread):
                 self.driver.refresh()
                 time.sleep(1)
 
+                # self.driver.get_screenshot_as_file('Exception_before_head.png')
                 head = self.driver.find_element_by_xpath('./*//title').get_attribute("innerText")
+                # self.driver.get_screenshot_as_file('Exception_after_head.png')
                 self.monitor_signal.emit(f"[" + head.strip() + f"研究生信息管理系统" + f"]" + f"打开成功")
 
                 if mode:
@@ -262,19 +276,21 @@ class Login(QThread):
             else:
                 self.monitor_signal.emit("[登录验证失败]")
 
-        # except UnexpectedAlertPresentException:  # TODO
-        #     self.monitor_signal.emit("你输入的验证码错误！")
         except Exception as e:
-
             print(str(e))
             if "你输入的验证码错误" in str(e):
-                self.driver.get_screenshot_as_file('Exception_before_refresh.png')
-                self.driver.refresh()
                 self.monitor_signal.emit("你输入的验证码错误")
+                self.load_username_password()
+                self.driver.get_screenshot_as_file('Exception_after_refresh.png')
+                raise CaptchaWrongError()
+
             if "用户名不存在" in str(e):
                 self.monitor_signal.emit("用户名不存在")
+                raise UserNotExistError()
+
             if "请输入验证码" in str(e):
                 self.monitor_signal.emit("请输入验证码")
+                raise ValidCaptchaError()
 
     def do_report(self, captcha="captcha"):
         try:
@@ -409,23 +425,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.thread.captcha_signal.connect(self.validate_captcha)
         self.thread.toast_signal.connect(self._toast)
         self.thread.disable_start_button_signal.connect(self._disable_start_button)
+        self.thread.refresh_captcha_signal.connect(self.refresh_login_captcha)
         self.label_connection_status.setText("已连接")
-
-        if self.check_auto.isChecked():
-            pass
-        else:
-            self.show_monitor("手动登录模式选定")
-            self.run()
-
-        # if self.thread.check_connection():
-        #     try:
-        #         self.run()
-        #     except:
-        #         try:
-        #             self.run()
-        #             print("第一组异常")
-        #         except:
-        #             pass
+        self.run()
 
     def stop_all(self):
         try:
@@ -498,10 +500,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 threading.Thread(target=self.thread.do_input,
                                  args=(self.line_captcha.text(),
                                        self.menu_report.isChecked(),)).start()
-
             self.line_captcha.clear()
-        except Exception as e:
-            self.show_monitor("[验证码]: " + str(e))
+
+        except CaptchaWrongError:
+            self.show_monitor("验证码错误")
+            print()
+        except UserNotExistError:
+            self.show_monitor("用户名不存在")
+        except ValidCaptchaError:
+            self.show_monitor("验证码非法")
 
     def _disable_start_button(self):
         self.button_start.setEnabled(False)
