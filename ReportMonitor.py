@@ -66,12 +66,7 @@ class Login(QThread):
             self.user = user
             self.password = password
         try:
-
-            self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").clear()
-            self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").send_keys(self.user)
-            self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").clear()
-            self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").send_keys(self.password)
-
+            self.load_username_password()
             self.login_captcha_cropping()
             self.ask_feedback_signal.emit(i)
 
@@ -79,10 +74,14 @@ class Login(QThread):
             self.ask_feedback_signal.emit(9)
             log.logger.error(e)
 
+    def load_username_password(self):
+        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").clear()
+        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").send_keys(self.user)
+        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").clear()
+        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").send_keys(self.password)
+
+
     def captcha_cropping(self):
-
-        # Zhongsheng modified on 15th April, 2021.
-
         self._reset_max_window()
         self.driver.get_screenshot_as_file('screenshot.png')
         self._cropping("./*//input[@name='txtyzm']/../img")
@@ -269,9 +268,13 @@ class Login(QThread):
 
             print(str(e))
             if "你输入的验证码错误" in str(e):
+                self.driver.get_screenshot_as_file('Exception_before_refresh.png')
+                self.driver.refresh()
                 self.monitor_signal.emit("你输入的验证码错误")
             if "用户名不存在" in str(e):
                 self.monitor_signal.emit("用户名不存在")
+            if "请输入验证码" in str(e):
+                self.monitor_signal.emit("请输入验证码")
 
     def do_report(self, captcha="captcha"):
         try:
@@ -322,13 +325,8 @@ class Login(QThread):
         img.save('code.png')
 
     def login_captcha_cropping(self):
-
         self._reset_max_window()
-        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").clear()
-        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").send_keys(self.user)
-        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").clear()
-        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").send_keys(self.password)
-
+        self.load_username_password()
         self.driver.get_screenshot_as_file('screenshot.png')
         self._cropping("./*//input[@name='_ctl0:txtyzm']/../img")
 
