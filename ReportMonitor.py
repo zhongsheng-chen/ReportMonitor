@@ -18,6 +18,7 @@ from PyQt5.QtWidgets import *
 from selenium import webdriver
 from selenium.common.exceptions import TimeoutException
 from selenium.common.exceptions import WebDriverException
+from selenium.common.exceptions import UnexpectedAlertPresentException
 from win10toast import ToastNotifier
 
 from Logger import Logger
@@ -276,6 +277,21 @@ class Login(QThread):
             else:
                 self.monitor_signal.emit("[登录验证失败]")
 
+        except UnexpectedAlertPresentException as e:
+            print("it is me")
+
+            if "你输入的验证码错误" in str(e):
+                try:
+                    self.monitor_signal.emit("你输入的验证码错误")
+                    self.driver.refresh()
+                    self.refresh_captcha_signal.emit()
+                except Exception as e:
+                    print(e)
+                # self.login_captcha_cropping()
+                # self.load_username_password()
+                # self.driver.get_screenshot_as_file('UnexpectedAlertPresentException_after_refresh.png')
+                # raise CaptchaWrongError()
+
         except Exception as e:
             print(str(e))
             if "你输入的验证码错误" in str(e):
@@ -385,6 +401,11 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.toaster = ToastNotifier()
         self.toast_flag = self.check_toast.isChecked()
 
+        self.button_start.setEnabled(False)
+        self.button_stop.setEnabled(False)
+        self.button_block_list.setEnabled(False)
+        self.line_captcha.setEnabled(False)
+
         try:
             with open('cookie.txt', 'r') as f:
                 cookie = f.readlines()
@@ -434,21 +455,28 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.thread.quit()
             self.retranslateUi(self)
             self.label_connection_status.setText("连接断开")
+            self.button_start.setEnabled(False)
+            self.button_stop.setEnabled(False)
+            self.button_block_list.setEnabled(False)
+            self.line_captcha.setEnabled(False)
+
             del self.thread
             del self.creat
         except Exception as e:
-            self.show_monitor("[Stop]: " + str(e))
+            self.show_monitor(str(e))
 
     def validate_captcha(self, captcha):
         self.line_captcha.setText(captcha)
         self._validate_captcha()
 
     def refresh_login_captcha(self):
-
-        self.thread.driver.refresh()
-        self.thread.login_captcha_cropping()
-        self.label_captcha_pic.setPixmap(QPixmap('code.png'))
-        self.show_monitor("验证码已更新")
+        try:
+            self.thread.driver.refresh()
+            self.thread.login_captcha_cropping()
+            self.label_captcha_pic.setPixmap(QPixmap('code.png'))
+            self.show_monitor("验证码已更新")
+        except Exception as e:
+            self.show_monitor(e)
 
     def show_monitor(self, string):
         self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ' + string)
@@ -459,8 +487,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.creat = Connection()
             self.creat.start()
             self.creat.creat_connection_signal.connect(self._make_connection)
+
+            self.button_start.setEnabled(True)
+            self.button_stop.setEnabled(True)
+            self.button_block_list.setEnabled(True)
+            self.line_captcha.setEnabled(True)
+
         except Exception as e:
-            self.label_connection_status.setText("连接失败，请重试" + e)
+            self.label_connection_status.setText("连接失败，请重试")
+            self.show_monitor(str(e))
 
     def block_report(self):
         threading.Thread(target=os.system, args=('overlook.txt',)).start()
@@ -477,7 +512,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.label_captcha_pic.setPixmap(QPixmap('code.png'))
         {'-1': lambda: self.label_feedback.setText("请稍候..."),
          '0': lambda: self.label_feedback.setText("登录成功\r\n开始监测"),
-         '1': lambda: self.label_feedback.setText("请输入验证码\r\n然后按下回车"),
+         '1': lambda: self.label_feedback.setText("请输入验证码\r\n然后按下开始按钮\r\n可在输入框内回车来刷新验证码"),
          '2': lambda: self.label_feedback.setText("登录失败\r\n请检查帐号密码并重试"),
          '4': lambda: self.label_feedback.setText("检测到可抢报告\r\n请输入验证码"),
          '5': lambda: self.label_feedback.setText("有抢到的报告\r\n请登录网站查看"),
@@ -512,6 +547,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def _disable_start_button(self):
         self.button_start.setEnabled(False)
+
+    def _enable_start_button(self):
+        self.button_start.setEnabled(True)
 
 
 if __name__ == '__main__':
