@@ -67,6 +67,7 @@ class Login(QThread):
         self.driver.get("http://" + goalurl + "/pyxx/login.aspx")
 
         self.page_element = self.driver.find_element_by_xpath('./*//title')
+        print(self.page_element.get_attribute("innerText"))
 
         self.captcha = "captcha"
         self.flag_first = True
@@ -209,11 +210,12 @@ class Login(QThread):
                 return True
             except:
                 try:
-                    # al=self.driver.switch_to_alert()
+
                     al = self.driver.switch_to.alert()
                     print("Driver alert")
                     al.accept()
                     return False
+
                 except:
                     time.sleep(0.1)
 
@@ -233,7 +235,7 @@ class Login(QThread):
             filter(lambda x: x not in whitespace, filter(lambda x: x in string.printable, captcha))).strip(
             ' \r\n\f\t\b\v\0')
 
-        if len(captcha):
+        if not len(captcha):
             captcha = "captcha"
 
         self.captcha = captcha
@@ -278,22 +280,20 @@ class Login(QThread):
                 self.monitor_signal.emit("验证码错误，请重新输入")
                 self.login_captcha_cropping()
                 self.refresh_captcha_signal.emit()
+                self.ask_feedback_signal.emit(1)
                 log.logger.error(f"验证码错误")
-                # raise CaptchaWrongError()
 
             if "请输入验证码" in str(e):
                 self.monitor_signal.emit("请输入验证码")
                 self.login_captcha_cropping()
                 self.refresh_captcha_signal.emit()
                 log.logger.error(f"验证码非法")
-                # raise ValidCaptchaError()
 
             if "用户名不存在" in str(e):
                 self.monitor_signal.emit("用户名不存在")
                 self.login_captcha_cropping()
                 self.refresh_captcha_signal.emit()
                 log.logger.error(f"用户名不存在")
-                # raise UserNotExistError()
 
             if "密码错误" in str(e):
                 self.monitor_signal.emit("密码错误")
@@ -399,7 +399,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         self.label_to_website.setOpenExternalLinks(True)
 
-        self.flag = 0
+        self.flag = -1
         self.toaster = ToastNotifier()
         self.toast_flag = self.check_toast.isChecked()
 
@@ -453,6 +453,23 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.label_connection_status.setText("已连接")
         self.run()
 
+    def make_connection(self):
+        try:
+            self.label_connection_status.setText("正在连接")
+            self.creat = Connection()
+            self.creat.start()
+            self.creat.creat_connection_signal.connect(self._make_connection)
+
+            self.button_start.setEnabled(True)
+            self.button_stop.setEnabled(True)
+            self.button_block_list.setEnabled(True)
+            self.line_captcha.setEnabled(True)
+
+        except Exception as e:
+            self.label_connection_status.setText("连接失败，请重试")
+            self.show_monitor(str(e))
+            log.logger.error("连接失败： " + str(e))
+
     def stop_all(self):
         try:
             self.thread.quit()
@@ -468,6 +485,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             del self.creat
         except Exception as e:
             self.show_monitor(str(e))
+            log.logger.error(str(e))
 
     def validate_captcha(self, captcha):
         self.line_captcha.setText(captcha)
@@ -496,23 +514,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def show_monitor(self, string):
         self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ' + string)
 
-    def make_connection(self):
-        try:
-            self.label_connection_status.setText("正在连接")
-            self.creat = Connection()
-            self.creat.start()
-            self.creat.creat_connection_signal.connect(self._make_connection)
-
-            self.button_start.setEnabled(True)
-            self.button_stop.setEnabled(True)
-            self.button_block_list.setEnabled(True)
-            self.line_captcha.setEnabled(True)
-
-        except Exception as e:
-            self.label_connection_status.setText("连接失败，请重试")
-            self.show_monitor(str(e))
-            log.logger.error("连接失败： " + str(e))
-
     def block_report(self):
         threading.Thread(target=os.system, args=('overlook.txt',)).start()
 
@@ -521,15 +522,15 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.thread.user = self.line_student_id.text()
             self.thread.password = self.line_password.text()
             self.thread.start()
-        except:
+        except Exception as e:
             self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ' + "还没有连接到网站")
-            log.logger.error("还没有连接到网站")
+            log.logger.error("还没有连接到网站" + str(e))
 
     def ask_feedback(self, flag, report_info=""):
         self.label_captcha_pic.setPixmap(QPixmap('code.png'))
         {'-1': lambda: self.label_feedback.setText("请稍候..."),
          '0': lambda: self.label_feedback.setText("登录成功\r\n开始监测"),
-         '1': lambda: self.label_feedback.setText("请输入验证码\r\n然后按下开始按钮\r\n可在输入框内回车来刷新验证码"),
+         '1': lambda: self.label_feedback.setText("请输入验证码\r\n"),
          '2': lambda: self.label_feedback.setText("登录失败\r\n请检查帐号密码并重试"),
          '4': lambda: self.label_feedback.setText("检测到可抢报告\r\n请输入验证码"),
          '5': lambda: self.label_feedback.setText("有抢到的报告\r\n请登录网站查看"),
@@ -542,6 +543,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if flag == 5:
             self._toast("有成功抢到的报告，请自行登录研究生管理系统查看详情。", -1)
             send_notification(report_info)
+            log.logger.info("有成功抢到的报告：" + report_info)
 
     def _validate_captcha(self):
         try:
@@ -556,10 +558,16 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         except CaptchaWrongError:
             self.show_monitor("验证码错误")
+            log.logger.error("验证码错误")
         except UserNotExistError:
             self.show_monitor("用户名不存在")
+            log.logger.error("用户名不存在")
         except ValidCaptchaError:
             self.show_monitor("验证码非法")
+            log.logger.error("验证码非法")
+        except Exception as e:
+            self.show_monitor("未知错误" + str(e))
+            log.logger.error(str(e))
 
     def _disable_start_button(self):
         self.button_start.setEnabled(False)
