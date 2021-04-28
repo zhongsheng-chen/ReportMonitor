@@ -1,23 +1,24 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-import sys
 import os
-from selenium import webdriver
-import json
-from PIL import Image
-import pytesseract
-import time
-from PyQt5.QtCore import *
-from PyQt5.QtWidgets import *
-from PyQt5.QtGui import *
-from ReportMonitor_UI import Ui_MainWindow
-import threading
-from win10toast import ToastNotifier
-from Notification import send_notification
-from collections import defaultdict
-import winsound
 import string
+import sys
+import threading
+import time
+
+import cv2
+import pytesseract
+import winsound
+from PIL import Image
+from PyQt5.QtCore import *
+from PyQt5.QtGui import *
+from PyQt5.QtWidgets import *
+from selenium import webdriver
+from win10toast import ToastNotifier
+
+from Notification import send_notification
+from ReportMonitor_UI import Ui_MainWindow
 
 goalurl = "yjsy.buct.edu.cn:8080"
 
@@ -251,57 +252,12 @@ class login(QThread):
 
     def ocr(self):
 
-        def _get_threshold(image):
-            pixel_dict = defaultdict(int)
-
-            #  a dictionary of pixels and the number of occurrences of that pixel
-            rows, cols = image.size
-            for i in range(rows):
-                for j in range(cols):
-                    pixel = image.getpixel((i, j))
-                    pixel_dict[pixel] += 1
-
-            count_max = max(pixel_dict.values())  # gets the number of times a pixel appears
-            pixel_dict_reverse = {v: k for k, v in pixel_dict.items()}
-            threshold = pixel_dict_reverse[count_max]  #
-
-            return threshold
-
-        def _get_bin_table(threshold):
-            table = []
-            for i in range(256):
-                rate = 0.1  # threshold
-                if threshold * (1 - rate) <= i <= threshold * (1 + rate):
-                    table.append(1)
-                else:
-                    table.append(0)
-            return table
-
-        def _cut_noise(image):
-            rows, cols = image.size  #
-            change_pos = []  #
-            for i in range(1, rows - 1):
-                for j in range(1, cols - 1):
-                    pixel_set = []
-                    for m in range(i - 1, i + 2):
-                        for n in range(j - 1, j + 2):
-                            if image.getpixel((m, n)) != 1:  # 1,0
-                                pixel_set.append(image.getpixel((m, n)))
-                    if len(pixel_set) <= 4:
-                        change_pos.append((i, j))
-            for pos in change_pos:
-                image.putpixel(pos, 1)
-            return image
-
-        image = Image.open('code.png')
-        image = image.convert('L')
-        max_pixel = _get_threshold(image)
-        table = _get_bin_table(threshold=max_pixel)
-        image = image.point(table, '1')
-        image.save('code_gray.png')
-        image = _cut_noise(image)
-        image.save('code_denoise.png')
-        yzm = pytesseract.image_to_string(image)
+        img = cv2.imread("code.png")
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+        img = cv2.inRange(img, lowerb=180, upperb=255)
+        cv2.imwrite('code_denoise.png', img)
+        img = Image.fromarray(img)
+        yzm = pytesseract.image_to_string(img)
         exclude_char_list = ' .·:`‘、“\\|\'\"?![],()~@#$%^&*_+-={};<>/¥'
         yzm = ''.join([x for x in yzm if x not in exclude_char_list])
 
