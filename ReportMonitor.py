@@ -26,7 +26,7 @@ from Notification import send_notification
 from ReportMonitor_UI import Ui_MainWindow
 
 goalurl = "yjsy.buct.edu.cn:8080"
-log = Logger('log.log')
+log = Logger('log.log', level='info')
 
 
 class UserNotExistError(Exception):
@@ -50,8 +50,6 @@ class Login(QThread):
     captcha_signal = pyqtSignal(str)
     toast_signal = pyqtSignal(str, int)
 
-    disable_start_button_signal = pyqtSignal()
-    disable_connect_button_signal = pyqtSignal()
     refresh_captcha_signal = pyqtSignal()
 
     user = 0
@@ -77,7 +75,6 @@ class Login(QThread):
         self.flag_first = True
 
     def run(self, i=1, user=0, password=0):
-
         if (user != 0) and (password != 0):
             self.user = user
             self.password = password
@@ -86,9 +83,9 @@ class Login(QThread):
             self.login_captcha_cropping()
             self.ask_feedback_signal.emit(i)
 
-        except Exception as e:  # TODO
+        except Exception as e:
             self.ask_feedback_signal.emit(9)
-            log.logger.error(str(e))
+            log.logger.error(e)
 
     def load_username_password(self):
         self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").clear()
@@ -108,7 +105,7 @@ class Login(QThread):
         self.driver.execute_script("arguments[0].scrollIntoView(false);", target)  # 拖动到可见的元素去
 
         i = 1
-        while 1:
+        while True:
             reports = self.driver.find_elements_by_xpath("./*//img[@alt='我要报名']")
             string = f"第{i}次监听..."
             for report in reports:
@@ -130,15 +127,15 @@ class Login(QThread):
                         report_info = f"报告名称：{report_name}\r\n报告时间：{report_date}\r\n" \
                                       f"报告地点：{report_location}\r\n可报名人数：{report_availability}"
 
-                        self.monitor_signal.emit(string + f"！有可抢报告...\r\n" + report_info)
+                        self.monitor_signal.emit(string + f"！发现报告...\r\n" + report_info)
                         self.captcha_cropping()
                         self.page_element = report
                         self.ask_feedback_signal.emit(4)
-                        self.toast_signal.emit("有可抢报告，请输入验证码！", -1)
+                        self.toast_signal.emit("发现报告，请输入验证码", -1)
 
                         winsound.Beep(600, 3000)
-                        send_notification(f"发现报告...\r\n" + report)
-                        log.logger.info(f"发现报告...\r\n" + report)
+                        send_notification(f"发现报告...\r\n" + report_info)
+                        log.logger.info(f"发现报告...\r\n" + report_info)
                         return
 
             try:
@@ -220,7 +217,6 @@ class Login(QThread):
                     time.sleep(0.1)
 
     def ocr(self):
-
         img = cv2.imread("code.png")
         img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
         img = cv2.inRange(img, lowerb=180, upperb=255)
@@ -261,18 +257,12 @@ class Login(QThread):
 
                 if mode:
                     self.ask_feedback_signal.emit(0)
-                    self.disable_start_button_signal.emit()
-                    self.disable_connect_button_signal.emit()
-                    self.monitor_signal.emit("登录验证成功")
-                    log.logger.info(f"登录验证成功")
-
                     self.monitor()
                 else:
                     self.chose_lesson()
 
             else:
-                self.monitor_signal.emit("登录验证失败")
-                log.logger.error(f"登录验证失败")
+                self.run(2)
 
         except UnexpectedAlertPresentException as e:
 
@@ -293,6 +283,7 @@ class Login(QThread):
                 self.monitor_signal.emit("用户名不存在")
                 self.login_captcha_cropping()
                 self.refresh_captcha_signal.emit()
+                # self.ask_feedback_signal.emit(2)  ###
                 log.logger.error(f"用户名不存在")
 
             if "密码错误" in str(e):
@@ -308,7 +299,8 @@ class Login(QThread):
                 log.logger.error(f"学号不存在")
 
         except Exception as e:
-            print("未知错误：" + str(e))
+            self.monitor_signal.emit(str(e))
+            log.logger.error(e)
 
     def do_report(self, captcha="captcha"):
         try:
@@ -322,14 +314,14 @@ class Login(QThread):
             self.judge()
             self.monitor()
         except Exception as e:
-            self.monitor_signal.emit("报名报告异常:" + str(e))
+            self.monitor_signal.emit(str(e))
+            log.logger.error(e)
 
     def quit(self):
         self.driver.quit()
 
     def check_connection(self):
         try:
-
             self.driver.get(self.driver.current_url)
             return True
         except WebDriverException:
@@ -341,11 +333,11 @@ class Login(QThread):
                         break
                     except Exception as e:
 
-                        Logger.warning('Unknown type of Exception.' + str(e))
+                        Logger.warning("未知错误：" + e)
                         return False
             except TimeoutException:
 
-                Logger.warning('TimeoutException when trying to reach page.')
+                Logger.warning("访问网页超时")
                 return False
 
     def _cropping(self, element):
@@ -414,7 +406,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.line_student_id.setText(cookie[0][:-1])
                 self.line_password.setText(cookie[1])
         except Exception as e:
-            self.show_monitor("打开cookie文件失败: " + str(e))
+            self.show_monitor("打开cookie文件失败: " + e)
 
     def __chose_lesson(self):
         threading.Thread(target=self.thread.chose_lesson, args=()).start()
@@ -426,7 +418,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                     sec = 5
                 self.toaster.show_toast("ReportMonitor", toast_str, icon_path='icon.ico', duration=sec, threaded=True)
             except Exception as e:
-                self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + str(e))
+                self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + e)
 
     def __toast_flag(self):
         self.toast_flag = self.check_toast.isChecked()
@@ -447,8 +439,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.thread.monitor_signal.connect(self.show_monitor)
         self.thread.captcha_signal.connect(self.validate_captcha)
         self.thread.toast_signal.connect(self._toast)
-        self.thread.disable_start_button_signal.connect(self._disable_start_button)
-        self.thread.disable_connect_button_signal.connect(self._disable_connect_button)
         self.thread.refresh_captcha_signal.connect(self.reload_login_captcha)
         self.label_connection_status.setText("已连接")
         self.run()
@@ -468,7 +458,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.label_connection_status.setText("连接失败，请重试")
             self.show_monitor(str(e))
-            log.logger.error("连接失败： " + str(e))
+            log.logger.error("连接失败： " + e)
 
     def stop_all(self):
         try:
@@ -483,9 +473,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
             del self.thread
             del self.creat
+            log.logger.info("连接断开")
         except Exception as e:
             self.show_monitor(str(e))
-            log.logger.error(str(e))
+            log.logger.error(e)
 
     def validate_captcha(self, captcha):
         self.line_captcha.setText(captcha)
@@ -500,7 +491,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             log.logger.info(f"验证码已更新")
         except Exception as e:
             self.show_monitor(str(e))
-            log.logger.error(str(e))
+            log.logger.error(e)
 
     def reload_login_captcha(self):
         try:
@@ -509,7 +500,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             log.logger.info(f"验证码已重新加载")
         except Exception as e:
             self.show_monitor(str(e))
-            log.logger.error(str(e))
+            log.logger.error(e)
 
     def show_monitor(self, string):
         self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ' + string)
@@ -524,7 +515,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.thread.start()
         except Exception as e:
             self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ' + "还没有连接到网站")
-            log.logger.error("还没有连接到网站" + str(e))
+            log.logger.error("还没有连接到网站" + e)
 
     def ask_feedback(self, flag, report_info=""):
         self.label_captcha_pic.setPixmap(QPixmap('code.png'))
@@ -537,17 +528,46 @@ class MainWindow(QMainWindow, Ui_MainWindow):
          '9': lambda: self.label_feedback.setText("登录异常")}[
             str(flag)]()
         self.flag = flag
-        if self.check_auto.isChecked() is True and flag != 0 and flag != 5:
-            threading.Thread(target=self.thread.ocr).start()
+
+        if flag == -1:
+            self.button_connect.setEnabled(False)
+
+        if flag == 0:
+            self.button_connect.setEnabled(False)
+            self.show_monitor("登录成功")
+            log.logger.info(f"登录成功")
+
+        if flag == 1:
+            self.button_start.setEnabled(True)
+            self.button_connect.setEnabled(False)
+
+        if flag == 2:
+            self.show_monitor("登录失败，请检查帐号密码并重试")
+            log.logger.error(f"登录失败，请检查帐号密码并重试")
+
+        if flag == 4:
+            self.button_start.setEnabled(True)
+            self.button_connect.setEnabled(False)
 
         if flag == 5:
+            self.button_connect.setEnabled(False)
             self._toast("有成功抢到的报告，请自行登录研究生管理系统查看详情。", -1)
             send_notification(report_info)
             log.logger.info("有成功抢到的报告：" + report_info)
 
+        if flag == 9:
+            self.button_connect.setEnabled(True)
+
+        if self.check_auto.isChecked():
+            self.button_start.setEnabled(False)
+
+        if self.check_auto.isChecked() is True:
+            if flag == 1 or flag == 4:
+                threading.Thread(target=self.thread.ocr).start()
+
     def _validate_captcha(self):
         try:
-            self.label_feedback.setText("请稍候")
+
             if self.flag == 4:
                 threading.Thread(target=self.thread.do_report, args=(self.line_captcha.text(),)).start()
             else:
@@ -566,14 +586,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.show_monitor("验证码非法")
             log.logger.error("验证码非法")
         except Exception as e:
-            self.show_monitor("未知错误" + str(e))
-            log.logger.error(str(e))
-
-    def _disable_start_button(self):
-        self.button_start.setEnabled(False)
-
-    def _disable_connect_button(self):
-        self.button_connect.setEnabled(False)
+            self.show_monitor(str(e))
+            log.logger.error(e)
 
 
 if __name__ == '__main__':
