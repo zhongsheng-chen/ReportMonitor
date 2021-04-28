@@ -133,7 +133,7 @@ class Login(QThread):
                         self.ask_feedback_signal.emit(4)
                         self.toast_signal.emit("发现报告，请输入验证码", -1)
 
-                        winsound.Beep(600, 3000)
+                        winsound.PlaySound("RemindMe.wav", winsound.SND_FILENAME)
                         send_notification(f"发现报告...\r\n" + report_info)
                         log.logger.info(f"发现报告...\r\n" + report_info)
                         return
