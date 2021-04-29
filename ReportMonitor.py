@@ -47,7 +47,7 @@ class CaptchaWrongError(Exception):
 class Login(QThread):
     ask_feedback_signal = pyqtSignal(int)
     monitor_signal = pyqtSignal(str)
-    captcha_signal = pyqtSignal(str)
+    validate_captcha_signal = pyqtSignal(str)
     toast_signal = pyqtSignal(str, int)
 
     refresh_captcha_signal = pyqtSignal()
@@ -79,24 +79,13 @@ class Login(QThread):
             self.user = user
             self.password = password
         try:
-            self.load_username_password()
+            # self.load_username_password()
             self.login_captcha_cropping()
             self.ask_feedback_signal.emit(i)
 
         except Exception as e:
             self.ask_feedback_signal.emit(9)
             log.logger.error(e)
-
-    def load_username_password(self):
-        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").clear()
-        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").send_keys(self.user)
-        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").clear()
-        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").send_keys(self.password)
-
-    def captcha_cropping(self):
-        self._reset_max_window()
-        self.driver.get_screenshot_as_file('screenshot.png')
-        self._cropping("./*//input[@name='txtyzm']/../img")
 
     def monitor(self):
         url = "http://" + goalurl + "/pyxx/txhdgl/hdlist.aspx?xh=" + self.user
@@ -236,7 +225,7 @@ class Login(QThread):
 
         self.captcha = captcha
         self.monitor_signal.emit("识别验证码：" + self.captcha)
-        self.captcha_signal.emit(str(self.captcha))
+        self.validate_captcha_signal.emit(str(self.captcha))
         time.sleep(0.1)
 
     def do_input(self, captcha="captcha", mode=True):
@@ -340,6 +329,12 @@ class Login(QThread):
                 Logger.warning("访问网页超时")
                 return False
 
+    def load_username_password(self):
+        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").clear()
+        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtusername']").send_keys(self.user)
+        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").clear()
+        self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").send_keys(self.password)
+
     def _cropping(self, element):
         captcha_element = self.driver.find_element_by_xpath(element)
         left = int(captcha_element.location['x'])
@@ -355,6 +350,12 @@ class Login(QThread):
         self.load_username_password()
         self.driver.get_screenshot_as_file('screenshot.png')
         self._cropping("./*//input[@name='_ctl0:txtyzm']/../img")
+
+    def captcha_cropping(self):
+        assert self.driver.current_url == "http://" + goalurl + "/pyxx/txhdgl/hdlist.aspx?xh=" + self.user
+        self._reset_max_window()
+        self.driver.get_screenshot_as_file('screenshot.png')
+        self._cropping("./*//input[@name='txtyzm']/../img")
 
     def _reset_max_window(self):
         self.driver.maximize_window()
@@ -437,7 +438,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.thread = x
         self.thread.ask_feedback_signal.connect(self.ask_feedback)
         self.thread.monitor_signal.connect(self.show_monitor)
-        self.thread.captcha_signal.connect(self.validate_captcha)
+        self.thread.validate_captcha_signal.connect(self.validate_captcha)
         self.thread.toast_signal.connect(self._toast)
         self.thread.refresh_captcha_signal.connect(self.reload_login_captcha)
         self.label_connection_status.setText("已连接")
@@ -487,8 +488,19 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.thread.driver.get(self.thread.driver.current_url)
             self.thread.login_captcha_cropping()
             self.label_captcha_pic.setPixmap(QPixmap('code.png'))
-            self.show_monitor("验证码已更新")
-            log.logger.info(f"验证码已更新")
+            self.show_monitor("登录验证码已更新")
+            log.logger.info(f"登录验证码已更新")
+        except Exception as e:
+            self.show_monitor(str(e))
+            log.logger.error(e)
+
+    def refresh_captcha(self):
+        try:
+            self.thread.driver.get(self.thread.driver.current_url)
+            self.thread.captcha_cropping()
+            self.label_captcha_pic.setPixmap(QPixmap('code.png'))
+            self.show_monitor("报名验证码已更新")
+            log.logger.info(f"报名验证码已更新")
         except Exception as e:
             self.show_monitor(str(e))
             log.logger.error(e)
@@ -534,6 +546,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
         if flag == 0:
             self.button_connect.setEnabled(False)
+            self.line_captcha.returnPressed.disconnect()
             self.show_monitor("登录成功")
             log.logger.info(f"登录成功")
 
