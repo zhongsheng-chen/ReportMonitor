@@ -69,6 +69,8 @@ class Login(QThread):
 
         self.captcha = "captcha"
         self.flag_first = True
+        self.has_login_captcha_cropped = False
+
         return super().__init__(*args, **kwargs)
 
     def __del__(self):
@@ -258,6 +260,7 @@ class Login(QThread):
             if "你输入的验证码错误" in str(e):
                 self.monitor_signal.emit("验证码错误，请重新输入")
                 self.login_captcha_cropping()
+                self.has_login_captcha_cropped = True
                 self.refresh_captcha_signal.emit()
                 self.ask_feedback_signal.emit(1)
                 log.logger.error(f"验证码错误")
@@ -265,25 +268,28 @@ class Login(QThread):
             if "请输入验证码" in str(e):
                 self.monitor_signal.emit("请输入验证码")
                 self.login_captcha_cropping()
+                self.has_login_captcha_cropped = True
                 self.refresh_captcha_signal.emit()
                 log.logger.error(f"验证码非法")
 
             if "用户名不存在" in str(e):
                 self.monitor_signal.emit("用户名不存在")
                 self.login_captcha_cropping()
+                self.has_login_captcha_cropped = True
                 self.refresh_captcha_signal.emit()
-                # self.ask_feedback_signal.emit(2)  ###
                 log.logger.error(f"用户名不存在")
 
             if "密码错误" in str(e):
                 self.monitor_signal.emit("密码错误")
                 self.login_captcha_cropping()
+                self.has_login_captcha_cropped = True
                 self.refresh_captcha_signal.emit()
                 log.logger.error(f"密码错误")
 
             if "该学号不存在" in str(e):
                 self.monitor_signal.emit("该学号不存在")
                 self.login_captcha_cropping()
+                self.has_login_captcha_cropped = True
                 self.refresh_captcha_signal.emit()
                 log.logger.error(f"学号不存在")
 
@@ -440,7 +446,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.thread.monitor_signal.connect(self.show_monitor)
         self.thread.validate_captcha_signal.connect(self.validate_captcha)
         self.thread.toast_signal.connect(self._toast)
-        self.thread.refresh_captcha_signal.connect(self.reload_login_captcha)
+        self.thread.refresh_captcha_signal.connect(self.refresh_login_captcha)
         self.label_connection_status.setText("已连接")
         self.run()
 
@@ -485,34 +491,51 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def refresh_login_captcha(self):
         try:
-            self.thread.driver.get(self.thread.driver.current_url)
-            self.thread.login_captcha_cropping()
-            self.label_captcha_pic.setPixmap(QPixmap('code.png'))
-            self.show_monitor("登录验证码已更新")
-            log.logger.info(f"登录验证码已更新")
+            if self.thread.has_login_captcha_cropped:
+                self.label_captcha_pic.setPixmap(QPixmap('code.png'))
+                self.thread.has_login_captcha_cropped = False
+
+                self.show_monitor("登录验证码已重新加载")
+                log.logger.info(f"登录验证码已重新加载")
+
+            else:
+                self.thread.driver.get(self.thread.driver.current_url)
+                self.thread.login_captcha_cropping()
+                self.label_captcha_pic.setPixmap(QPixmap('code.png'))
+
+                self.show_monitor("登录验证码已更新")
+                log.logger.info(f"登录验证码已更新")
+
         except Exception as e:
             self.show_monitor(str(e))
             log.logger.error(e)
 
     def refresh_captcha(self):
         try:
-            self.thread.driver.get(self.thread.driver.current_url)
-            self.thread.captcha_cropping()
-            self.label_captcha_pic.setPixmap(QPixmap('code.png'))
-            self.show_monitor("报名验证码已更新")
-            log.logger.info(f"报名验证码已更新")
+            if self.thread.has_login_captcha_cropped:
+                self.label_captcha_pic.setPixmap(QPixmap('code.png'))
+                self.show_monitor("验证码已重新加载")
+                log.logger.info(f"验证码已重新加载")
+                print(self.thread.has_login_captcha_cropped)
+            else:
+                self.thread.driver.get(self.thread.driver.current_url)
+                self.thread.captcha_cropping()
+                self.label_captcha_pic.setPixmap(QPixmap('code.png'))
+                self.show_monitor("报名验证码已更新")
+                log.logger.info(f"报名验证码已更新")
+                print(self.thread.has_login_captcha_cropped)
         except Exception as e:
             self.show_monitor(str(e))
             log.logger.error(e)
 
-    def reload_login_captcha(self):
-        try:
-            self.label_captcha_pic.setPixmap(QPixmap('code.png'))
-            self.show_monitor("验证码已重新加载")
-            log.logger.info(f"验证码已重新加载")
-        except Exception as e:
-            self.show_monitor(str(e))
-            log.logger.error(e)
+    # def reload_login_captcha(self):
+    #     try:
+    #         self.label_captcha_pic.setPixmap(QPixmap('code.png'))
+    #         self.show_monitor("验证码已重新加载")
+    #         log.logger.info(f"验证码已重新加载")
+    #     except Exception as e:
+    #         self.show_monitor(str(e))
+    #         log.logger.error(e)
 
     def show_monitor(self, string):
         self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ' + string)
