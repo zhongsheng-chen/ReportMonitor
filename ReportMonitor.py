@@ -25,7 +25,10 @@ from Logger import Logger
 from Notification import send_notification
 from ReportMonitor_UI import Ui_MainWindow
 
-goalurl = "yjsy.buct.edu.cn:8080"
+login_addr = "http://yjsy.buct.edu.cn:8080/pyxx/login.aspx"
+report_addr = "http://yjsy.buct.edu.cn:8080/pyxx/txhdgl/hdlist.aspx?xh="
+lesson_addr = "http://yjsy.buct.edu.cn:8080//PYXX/pygl/pyjhxk.aspx?xh="
+
 log = Logger('log.log', level='info')
 
 
@@ -62,7 +65,7 @@ class Login(QThread):
 
     def __init__(self, *args, **kwargs):
         self.driver = webdriver.Chrome(options=self.option)
-        self.driver.get("http://" + goalurl + "/pyxx/login.aspx")
+        self.driver.get(login_addr)
 
         self.page_element = self.driver.find_element_by_xpath('./*//title')
         print(self.page_element.get_attribute("innerText"))
@@ -81,7 +84,7 @@ class Login(QThread):
             self.user = user
             self.password = password
         try:
-            # self.load_username_password()
+
             self.login_captcha_cropping()
             self.ask_feedback_signal.emit(i)
 
@@ -90,72 +93,78 @@ class Login(QThread):
             log.logger.error(e)
 
     def monitor(self):
-        url = "http://" + goalurl + "/pyxx/txhdgl/hdlist.aspx?xh=" + self.user
+        url = report_addr + self.user
         self.driver.get(url)
         target = self.driver.find_element_by_xpath("./*//input[@name='txtyzm']/../img")
         self.driver.execute_script("arguments[0].scrollIntoView(false);", target)  # 拖动到可见的元素去
+
+        try:
+            previous_report_list = self.driver.find_elements_by_xpath("./*//img[@alt='提交心得']")
+        except:
+            previous_report_list = []
+        if (len(previous_report_list) - len(self.report_list)) == 1 and self.flag_first is False:
+            new_report = list(filter(lambda rep: rep not in previous_report_list, self.report_list))[0]
+            new_report_name = new_report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+            new_report_date = new_report.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
+            new_report_location = new_report.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
+            new_report_info = f"报告名称：{new_report_name}\r\n" \
+                              f"报告时间：{new_report_date}\r\n" \
+                              f"报告地点：{new_report_location}"
+
+            self.ask_feedback_signal.emit(5, f"已经抢到报告...\r\n" + new_report_info)
+            log.logger.info(f"已经抢到报告...\r\n" + new_report_info)
+        self.report_list = previous_report_list
+        self.flag_first = False
 
         i = 1
         while True:
             reports = self.driver.find_elements_by_xpath("./*//img[@alt='我要报名']")
             string = f"第{i}次监听..."
-            for report in reports:
-                leapflag = False
-                max_num = report.find_element_by_xpath("../../../td[7]").get_attribute("innerText")
-                now_num = report.find_element_by_xpath("../../../td[8]").get_attribute("innerText")
-                if now_num < max_num:
-                    report_name = report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
-                    with open('overlook.txt', 'r') as f:
-                        for x in f.readlines():
-                            if report_name == x[:-1]:
-                                leapflag = True
-                                string = string + report_name + " 在屏蔽列表中，不选择。"
-                    if leapflag == False:
-                        report_name = report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
-                        report_date = report.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
-                        report_location = report.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
-                        report_availability = str(int(max_num) - int(now_num))
-                        report_info = f"报告名称：{report_name}\r\n报告时间：{report_date}\r\n" \
-                                      f"报告地点：{report_location}\r\n可报名人数：{report_availability}"
 
-                        self.monitor_signal.emit(string + f"！发现报告...\r\n" + report_info)
-                        self.captcha_cropping()
-                        self.page_element = report
-                        self.ask_feedback_signal.emit(4)
-                        self.toast_signal.emit("发现报告，请输入验证码", -1)
+            self.monitor_signal.emit(string + f"！发现报告...")
+            self.captcha_cropping()
+            self.ask_feedback_signal.emit(4)
+            # self.toast_signal.emit("发现报告，请输入验证码", -1)
 
-                        winsound.PlaySound("RemindMe.wav", winsound.SND_FILENAME)
-                        send_notification(f"发现报告...\r\n" + report_info)
-                        log.logger.info(f"发现报告...\r\n" + report_info)
-                        return
+            # for report in reports:
+            #     leapflag = False
+            #     max_num = report.find_element_by_xpath("../../../td[7]").get_attribute("innerText")
+            #     now_num = report.find_element_by_xpath("../../../td[8]").get_attribute("innerText")
+            #     if now_num < max_num:
+            #         report_name = report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+            #         with open('overlook.txt', 'r') as f:
+            #             for x in f.readlines():
+            #                 if report_name == x[:-1]:
+            #                     leapflag = True
+            #                     string = string + report_name + " 在屏蔽列表中，不选择。"
+            #         if leapflag == False:
+            #             report_name = report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+            #             report_date = report.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
+            #             report_location = report.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
+            #             report_availability = str(int(max_num) - int(now_num))
+            #             report_info = f"报告名称：{report_name}\r\n报告时间：{report_date}\r\n" \
+            #                           f"报告地点：{report_location}\r\n可报名人数：{report_availability}"
+            #
+            #             self.monitor_signal.emit(string + f"！发现报告...\r\n" + report_info)
+            #             self.captcha_cropping()
+            #             self.page_element = report
+            #             self.ask_feedback_signal.emit(4)
+            #             self.toast_signal.emit("发现报告，请输入验证码", -1)
+            #
+            #             winsound.PlaySound("RemindMe.wav", winsound.SND_FILENAME)
+            #             send_notification(f"发现报告...\r\n" + report_info)
+            #             log.logger.info(f"发现报告...\r\n" + report_info)
+            #             return
 
-            try:
-                previous_report_list = self.driver.find_elements_by_xpath("./*//img[@alt='提交心得']")
-            except:
-                previous_report_list = []
-            if (len(previous_report_list) - len(self.report_list)) == 1 and self.flag_first is False:
-                new_report = list(filter(lambda report: report not in previous_report_list, self.report_list))[0]
-                new_report_name = new_report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
-                new_report_date = new_report.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
-                new_report_location = new_report.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
-                new_report_info = f"报告名称：{new_report_name}\r\n" \
-                                  f"报告时间：{new_report_date}\r\n" \
-                                  f"报告地点：{new_report_location}"
-
-                self.ask_feedback_signal.emit(5, f"已经抢到报告...\r\n" + new_report_info)
-                log.logger.info(f"已经抢到报告...\r\n" + new_report_info)
-            self.report_list = previous_report_list
-            self.flag_first = False
-
-            self.monitor_signal.emit(string)
+            # self.monitor_signal.emit(string)
             log.logger.info(string)
 
-            time.sleep(3)
+            time.sleep(1)
             i = i + 1
             self.driver.refresh()
 
     def chose_lesson(self):
-        url = "http://" + goalurl + "/PYXX/pygl/pyjhxk.aspx?xh=" + self.user
+        url = lesson_addr + self.user
         self.driver.get(url)
         i = 1
         while 1:
@@ -305,10 +314,11 @@ class Login(QThread):
             time.sleep(0.5)
             alert = self.driver.switch_to.alert
             alert.accept()
-            time.sleep(1)
+            time.sleep(0.5)
             self.judge()
             self.monitor()
         except Exception as e:
+            self.monitor()
             self.monitor_signal.emit(str(e))
             log.logger.error(e)
 
@@ -341,7 +351,7 @@ class Login(QThread):
         self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").clear()
         self.driver.find_element_by_xpath("./*//input[@name='_ctl0:txtpassword']").send_keys(self.password)
 
-    def _cropping(self, element):
+    def _login_captcha_cropping(self, element):
         captcha_element = self.driver.find_element_by_xpath(element)
         left = int(captcha_element.location['x'])
         top = int(captcha_element.location['y'])
@@ -355,13 +365,26 @@ class Login(QThread):
         self._reset_max_window()
         self.load_username_password()
         self.driver.get_screenshot_as_file('screenshot.png')
-        self._cropping("./*//input[@name='_ctl0:txtyzm']/../img")
+        self._login_captcha_cropping("./*//input[@name='_ctl0:txtyzm']/../img")
+
+    def _captcha_cropping(self, element):
+        img = Image.open('screenshot.png')
+        captcha_element = self.driver.find_element_by_xpath(element)
+        left = int(captcha_element.location['x'])
+        right = int(captcha_element.location['x'] + captcha_element.size['width'])
+        if int(captcha_element.location['y'] + captcha_element.size['height']) > img.height:
+            bottom = img.height
+        else:
+            bottom = int(captcha_element.location['y'] + captcha_element.size['height'])
+        top = bottom - int(captcha_element.size['height'])
+        bottom = int(captcha_element.location['y'] + captcha_element.size['height'])
+        img = img.crop((left + 0.5, top + 1.5, right - 0.5, bottom - 13))
+        img.save('code.png')
 
     def captcha_cropping(self):
-        assert self.driver.current_url == "http://" + goalurl + "/pyxx/txhdgl/hdlist.aspx?xh=" + self.user
         self._reset_max_window()
         self.driver.get_screenshot_as_file('screenshot.png')
-        self._cropping("./*//input[@name='txtyzm']/../img")
+        self._captcha_cropping("./*//input[@name='txtyzm']/../img")
 
     def _reset_max_window(self):
         self.driver.maximize_window()
@@ -512,22 +535,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def refresh_captcha(self):
         try:
-            if self.thread.has_login_captcha_cropped:
-                self.label_captcha_pic.setPixmap(QPixmap('code.png'))
-                self.show_monitor("验证码已重新加载")
-                log.logger.info(f"验证码已重新加载")
-                print(self.thread.has_login_captcha_cropped)
-            else:
-                self.thread.driver.get(self.thread.driver.current_url)
-                self.thread.captcha_cropping()
-                self.label_captcha_pic.setPixmap(QPixmap('code.png'))
-                self.show_monitor("报名验证码已更新")
-                log.logger.info(f"报名验证码已更新")
-                print(self.thread.has_login_captcha_cropped)
+            self.label_captcha_pic.setPixmap(QPixmap('code.png'))
+            self.show_monitor("验证码已重新加载")
+            log.logger.info(f"验证码已重新加载")
+
         except Exception as e:
             self.show_monitor(str(e))
             log.logger.error(e)
-
 
     def show_monitor(self, string):
         self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ' + string)
@@ -592,6 +606,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         if self.check_auto.isChecked() is True:
             if flag == 1 or flag == 4:
                 threading.Thread(target=self.thread.ocr).start()
+        else:
+            if flag == 4:
+                self.line_captcha.returnPressed.connect(self.refresh_captcha)
 
     def _validate_captcha(self):
         try:
