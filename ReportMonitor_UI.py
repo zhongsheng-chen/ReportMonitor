@@ -72,6 +72,7 @@ class Ui_MainWindow(object):
         font = QtGui.QFont()
         font.setPointSize(16)
         self.check_auto.setFont(font)
+        self.check_auto.setChecked(True)
         self.check_auto.setObjectName("check_auto")
         self.gridLayout.addWidget(self.check_auto, 3, 7, 1, 1)
         self.label_promote = QtWidgets.QLabel(self.centralwidget)

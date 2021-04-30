@@ -123,47 +123,42 @@ class Login(QThread):
             reports = self.driver.find_elements_by_xpath("./*//img[@alt='我要报名']")
             string = f"第{i}次监听..."
 
-            self.monitor_signal.emit(string + f"！发现报告...")
-            self.captcha_cropping()
-            self.ask_feedback_signal.emit(4)
-            # self.toast_signal.emit("发现报告，请输入验证码", -1)
+            for report in reports:
+                leapflag = False
+                max_num = report.find_element_by_xpath("../../../td[7]").get_attribute("innerText")
+                now_num = report.find_element_by_xpath("../../../td[8]").get_attribute("innerText")
+                if now_num < max_num:
+                    report_name = report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+                    with open('overlook.txt', 'r') as f:
+                        for x in f.readlines():
+                            if report_name == x[:-1]:
+                                leapflag = True
+                                string = string + report_name + " 在屏蔽列表中，不选择。"
+                    if leapflag == False:
+                        report_name = report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
+                        report_date = report.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
+                        report_location = report.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
+                        report_availability = str(int(max_num) - int(now_num))
+                        report_info = f"报告名称：{report_name}\r\n报告时间：{report_date}\r\n" \
+                                      f"报告地点：{report_location}\r\n可报名人数：{report_availability}"
 
-            # for report in reports:
-            #     leapflag = False
-            #     max_num = report.find_element_by_xpath("../../../td[7]").get_attribute("innerText")
-            #     now_num = report.find_element_by_xpath("../../../td[8]").get_attribute("innerText")
-            #     if now_num < max_num:
-            #         report_name = report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
-            #         with open('overlook.txt', 'r') as f:
-            #             for x in f.readlines():
-            #                 if report_name == x[:-1]:
-            #                     leapflag = True
-            #                     string = string + report_name + " 在屏蔽列表中，不选择。"
-            #         if leapflag == False:
-            #             report_name = report.find_element_by_xpath("../../../td[2]").get_attribute("innerText")
-            #             report_date = report.find_element_by_xpath("../../../td[4]").get_attribute("innerText")
-            #             report_location = report.find_element_by_xpath("../../../td[6]").get_attribute("innerText")
-            #             report_availability = str(int(max_num) - int(now_num))
-            #             report_info = f"报告名称：{report_name}\r\n报告时间：{report_date}\r\n" \
-            #                           f"报告地点：{report_location}\r\n可报名人数：{report_availability}"
-            #
-            #             self.monitor_signal.emit(string + f"！发现报告...\r\n" + report_info)
-            #             self.captcha_cropping()
-            #             self.page_element = report
-            #             self.ask_feedback_signal.emit(4)
-            #             self.toast_signal.emit("发现报告，请输入验证码", -1)
-            #
-            #             winsound.PlaySound("RemindMe.wav", winsound.SND_FILENAME)
-            #             send_notification(f"发现报告...\r\n" + report_info)
-            #             log.logger.info(f"发现报告...\r\n" + report_info)
-            #             return
+                        self.monitor_signal.emit(string + f"！发现报告...\r\n" + report_info)
+                        self.captcha_cropping()
+                        self.page_element = report
+                        self.ask_feedback_signal.emit(4)
+                        self.toast_signal.emit("发现报告，请输入验证码", -1)
 
-            # self.monitor_signal.emit(string)
+                        winsound.PlaySound("RemindMe.wav", winsound.SND_FILENAME)
+                        send_notification(f"发现报告...\r\n" + report_info)
+                        log.logger.info(f"发现报告...\r\n" + report_info)
+                        return
+
+            self.monitor_signal.emit(string)
             log.logger.info(string)
 
-            time.sleep(1)
+            time.sleep(3)
             i = i + 1
-            # self.driver.refresh()
+            self.driver.refresh()
 
     def chose_lesson(self):
         url = lesson_addr + self.user
@@ -357,6 +352,8 @@ class Login(QThread):
                     self.refresh_captcha_signal.emit()
                     self.ask_feedback_signal.emit(4)
                     log.logger.error("报名验证异常。" + str(e))
+
+                    # self.monitor()
 
             except Exception as e:
                 self.monitor()
@@ -582,8 +579,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.label_captcha_pic.setPixmap(QPixmap('code.png'))
                 self.thread.has_captcha_cropped = False
 
-                self.show_monitor("报告验证码已更新（has_captcha_cropped）")
-                log.logger.info(f"报告验证码已更新（has_captcha_cropped）")
+                self.show_monitor("报告验证码已更新")
+                log.logger.info(f"报告验证码已更新")
 
             else:
                 self.thread.driver.get(self.thread.driver.current_url)
