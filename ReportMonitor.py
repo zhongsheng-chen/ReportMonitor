@@ -50,10 +50,11 @@ class CaptchaWrongError(Exception):
 class Login(QThread):
     ask_feedback_signal = pyqtSignal(int)
     monitor_signal = pyqtSignal(str)
-    validate_captcha_signal = pyqtSignal(str)
+    prepare_captcha_signal = pyqtSignal(str)
     toast_signal = pyqtSignal(str, int)
 
     refresh_login_captcha_signal = pyqtSignal()
+    refresh_captcha_signal = pyqtSignal()
 
     user = 0
     password = 0
@@ -73,6 +74,7 @@ class Login(QThread):
         self.captcha = "captcha"
         self.flag_first = True
         self.has_login_captcha_cropped = False
+        self.has_captcha_cropped = False
 
         return super().__init__(*args, **kwargs)
 
@@ -161,7 +163,7 @@ class Login(QThread):
 
             time.sleep(1)
             i = i + 1
-            self.driver.refresh()
+            # self.driver.refresh()
 
     def chose_lesson(self):
         url = lesson_addr + self.user
@@ -236,7 +238,7 @@ class Login(QThread):
 
         self.captcha = captcha
         self.monitor_signal.emit("识别验证码：" + self.captcha)
-        self.validate_captcha_signal.emit(str(self.captcha))
+        self.prepare_captcha_signal.emit(str(self.captcha))
         time.sleep(0.1)
 
     def do_input(self, captcha="captcha", mode=True):
@@ -315,12 +317,44 @@ class Login(QThread):
             alert = self.driver.switch_to.alert
             alert.accept()
             time.sleep(0.5)
-            self.judge()
-            self.monitor()
+
+            if self.judge():  # if register a report successfully, do it again
+                self.monitor_signal.emit("报名验证成功")
+                self.monitor()
+            else:  # if not, refresh captcha to prepare for next attempts
+                self.monitor_signal.emit("报名验证失败")
+                self.driver.refresh()
+                self.captcha_cropping()
+                self.has_captcha_cropped = True
+                self.refresh_captcha_signal.emit()
+
         except Exception as e:
-            self.monitor()
-            self.monitor_signal.emit(str(e))
-            log.logger.error(e)
+
+            try:
+                if "报名已满" in str(e):
+                    self.monitor()
+                elif "验证码错误" in str(e):
+                    self.monitor_signal.emit("报名验证码错误")
+                    self.driver.refresh()
+                    self.captcha_cropping()
+                    self.has_captcha_cropped = True
+                    self.refresh_captcha_signal.emit()
+                    self.ask_feedback_signal.emit(4)
+
+                else:
+                    self.monitor_signal.emit("报名验证异常")
+                    self.driver.refresh()
+                    self.captcha_cropping()
+                    self.has_captcha_cropped = True
+                    self.refresh_captcha_signal.emit()
+                    self.ask_feedback_signal.emit(4)
+                    # self.monitor()
+
+                    self.monitor_signal.emit(str(e))
+                    log.logger.error(e)
+            except Exception as e:
+                self.monitor_signal.emit(str(e))
+                log.logger.error(e)
 
     def quit(self):
         self.driver.quit()
@@ -410,7 +444,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         super(MainWindow, self).__init__(parent)
         self.setupUi(self)
 
-        self.button_start.clicked.connect(self._validate_captcha)
+        self.button_start.clicked.connect(self.validate_captcha)
         self.button_connect.clicked.connect(self.make_connection)
 
         self.button_block_list.clicked.connect(self.block_report)
@@ -467,9 +501,10 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         self.thread = x
         self.thread.ask_feedback_signal.connect(self.ask_feedback)
         self.thread.monitor_signal.connect(self.show_monitor)
-        self.thread.validate_captcha_signal.connect(self.validate_captcha)
+        self.thread.prepare_captcha_signal.connect(self.prepare_captcha)
         self.thread.toast_signal.connect(self._toast)
         self.thread.refresh_login_captcha_signal.connect(self.refresh_login_captcha)
+        self.thread.refresh_captcha_signal.connect(self.refresh_captcha)
         self.label_connection_status.setText("已连接")
         self.run()
 
@@ -508,9 +543,9 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.show_monitor(str(e))
             log.logger.error(e)
 
-    def validate_captcha(self, captcha):
+    def prepare_captcha(self, captcha):
         self.line_captcha.setText(captcha)
-        self._validate_captcha()
+        self.validate_captcha()
 
     def refresh_login_captcha(self):
         try:
@@ -535,9 +570,21 @@ class MainWindow(QMainWindow, Ui_MainWindow):
 
     def refresh_captcha(self):
         try:
-            self.label_captcha_pic.setPixmap(QPixmap('code.png'))
-            self.show_monitor("验证码已重新加载")
-            log.logger.info(f"验证码已重新加载")
+
+            if self.thread.has_captcha_cropped:
+                self.label_captcha_pic.setPixmap(QPixmap('code.png'))
+                self.thread.has_captcha_cropped = False
+
+                self.show_monitor("报告验证码已更新")
+                log.logger.info(f"报告验证码已更新")
+
+            else:
+                self.thread.driver.get(self.thread.driver.current_url)
+                self.thread.captcha_cropping()
+                self.label_captcha_pic.setPixmap(QPixmap('code.png'))
+
+                self.show_monitor("报告验证码已更新")
+                log.logger.info(f"报告验证码已更新")
 
         except Exception as e:
             self.show_monitor(str(e))
@@ -584,6 +631,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.button_connect.setEnabled(False)
 
         if flag == 2:
+            self.button_connect.setEnabled(True)
             self.show_monitor("登录失败，请检查帐号密码并重试")
             log.logger.error(f"登录失败，请检查帐号密码并重试")
 
@@ -610,7 +658,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             if flag == 4:
                 self.line_captcha.returnPressed.connect(self.refresh_captcha)
 
-    def _validate_captcha(self):
+    def validate_captcha(self):
         try:
 
             if self.flag == 4:
