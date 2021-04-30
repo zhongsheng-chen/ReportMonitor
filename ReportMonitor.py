@@ -276,33 +276,37 @@ class Login(QThread):
                 self.ask_feedback_signal.emit(1)
                 log.logger.error(f"验证码错误")
 
-            if "请输入验证码" in str(e):
+            elif "请输入验证码" in str(e):
                 self.monitor_signal.emit("请输入验证码")
                 self.login_captcha_cropping()
                 self.has_login_captcha_cropped = True
                 self.refresh_login_captcha_signal.emit()
                 log.logger.error(f"验证码非法")
 
-            if "用户名不存在" in str(e):
+            elif "用户名不存在" in str(e):
                 self.monitor_signal.emit("用户名不存在")
                 self.login_captcha_cropping()
                 self.has_login_captcha_cropped = True
                 self.refresh_login_captcha_signal.emit()
                 log.logger.error(f"用户名不存在")
 
-            if "密码错误" in str(e):
+            elif "密码错误" in str(e):
                 self.monitor_signal.emit("密码错误")
                 self.login_captcha_cropping()
                 self.has_login_captcha_cropped = True
                 self.refresh_login_captcha_signal.emit()
                 log.logger.error(f"密码错误")
 
-            if "该学号不存在" in str(e):
+            elif "该学号不存在" in str(e):
                 self.monitor_signal.emit("该学号不存在")
                 self.login_captcha_cropping()
                 self.has_login_captcha_cropped = True
                 self.refresh_login_captcha_signal.emit()
                 log.logger.error(f"学号不存在")
+
+            else:
+                self.monitor_signal.emit(str(e))
+                log.logger.error(e)
 
         except Exception as e:
             self.monitor_signal.emit(str(e))
@@ -320,6 +324,7 @@ class Login(QThread):
 
             if self.judge():  # if register a report successfully, do it again
                 self.monitor_signal.emit("报名验证成功")
+                log.logger.info("报名验证成功")
                 self.monitor()
             else:  # if not, refresh captcha to prepare for next attempts
                 self.monitor_signal.emit("报名验证失败")
@@ -327,6 +332,8 @@ class Login(QThread):
                 self.captcha_cropping()
                 self.has_captcha_cropped = True
                 self.refresh_captcha_signal.emit()
+                self.ask_feedback_signal.emit(4)
+                log.logger.error("报名验证失败")
 
         except Exception as e:
 
@@ -340,19 +347,19 @@ class Login(QThread):
                     self.has_captcha_cropped = True
                     self.refresh_captcha_signal.emit()
                     self.ask_feedback_signal.emit(4)
+                    log.logger.error("报名验证码错误")
 
                 else:
-                    self.monitor_signal.emit("报名验证异常")
+                    self.monitor_signal.emit("报名验证异常。" + str(e))
                     self.driver.refresh()
                     self.captcha_cropping()
                     self.has_captcha_cropped = True
                     self.refresh_captcha_signal.emit()
                     self.ask_feedback_signal.emit(4)
-                    # self.monitor()
+                    log.logger.error("报名验证异常。" + str(e))
 
-                    self.monitor_signal.emit(str(e))
-                    log.logger.error(e)
             except Exception as e:
+                self.monitor()
                 self.monitor_signal.emit(str(e))
                 log.logger.error(e)
 
@@ -372,7 +379,7 @@ class Login(QThread):
                         break
                     except Exception as e:
 
-                        Logger.warning("未知错误：" + e)
+                        Logger.warning("未知错误。" + e)
                         return False
             except TimeoutException:
 
@@ -412,7 +419,7 @@ class Login(QThread):
             bottom = int(captcha_element.location['y'] + captcha_element.size['height'])
         top = bottom - int(captcha_element.size['height'])
         bottom = int(captcha_element.location['y'] + captcha_element.size['height'])
-        img = img.crop((left + 0.5, top + 1.5, right - 0.5, bottom - 13))
+        img = img.crop((left + 0.5, top + 1.5, right - 0.5, bottom - 16))
         img.save('code.png')
 
     def captcha_cropping(self):
@@ -470,7 +477,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.line_student_id.setText(cookie[0][:-1])
                 self.line_password.setText(cookie[1])
         except Exception as e:
-            self.show_monitor("打开cookie文件失败: " + e)
+            self.show_monitor("打开cookie文件失败。" + e)
 
     def __chose_lesson(self):
         threading.Thread(target=self.thread.chose_lesson, args=()).start()
@@ -523,7 +530,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         except Exception as e:
             self.label_connection_status.setText("连接失败，请重试")
             self.show_monitor(str(e))
-            log.logger.error("连接失败： " + e)
+            log.logger.error("连接失败。" + e)
 
     def stop_all(self):
         try:
@@ -575,8 +582,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
                 self.label_captcha_pic.setPixmap(QPixmap('code.png'))
                 self.thread.has_captcha_cropped = False
 
-                self.show_monitor("报告验证码已更新")
-                log.logger.info(f"报告验证码已更新")
+                self.show_monitor("报告验证码已更新（has_captcha_cropped）")
+                log.logger.info(f"报告验证码已更新（has_captcha_cropped）")
 
             else:
                 self.thread.driver.get(self.thread.driver.current_url)
@@ -603,7 +610,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             self.thread.start()
         except Exception as e:
             self.text_info_board.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ' ' + "还没有连接到网站")
-            log.logger.error("还没有连接到网站" + e)
+            log.logger.error("还没有连接到网站。" + e)
 
     def ask_feedback(self, flag, report_info=""):
         self.label_captcha_pic.setPixmap(QPixmap('code.png'))
